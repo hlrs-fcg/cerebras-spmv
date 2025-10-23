@@ -1,0 +1,24 @@
+// single PE (1x1 grid)
+param width: i16 = 1;
+param height: i16 = 1;
+
+// Parameters for PE - these will come from compilation
+param TOTAL_NNZ: i16 = 50;    // Total nonzeros for this PE
+param MAX_ROWS: i16 = 20;     // Max rows this PE handles
+
+// Colors for memcpy (reserved by SDK)
+const memcpy_params = .{
+    .width = width,
+    .height = height,
+};
+
+layout {
+    @set_rectangle(width, height);
+    
+    // Configure the single PE at (0, 0)
+    @set_tile_code(0, 0, "pe.csl", .{
+        .memcpy_params = memcpy_params,
+        .TOTAL_NNZ = TOTAL_NNZ,
+        .MAX_ROWS = MAX_ROWS,
+    });
+}

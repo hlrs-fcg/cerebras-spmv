@@ -1,0 +1,80 @@
+// pe.csl
+// Kernel code that runs on each PE
+
+// Parameters passed from layout
+param memcpy_params: comptime_struct;
+param TOTAL_NNZ: i16;
+param MAX_ROWS: i16;
+
+// Import memcpy module for host communication
+const sys_mod = @import_module("<memcpy/memcpy>", memcpy_params);
+
+// ============================================================================
+// Storage for SpMV data
+// ============================================================================
+
+// Row structure (CSR-style)
+var row_offsets: [MAX_ROWS + 1]i16;   // Start index for each row
+var num_rows: i16 = 0;                 // Actual number of rows
+
+// Matched pairs data
+var matrix_values: [TOTAL_NNZ]f32;    // Matrix values
+var vector_values: [TOTAL_NNZ]f32;    // Pre-gathered vector values
+
+// Results
+var results: [MAX_ROWS]f32;           // Output: y = A*x
+
+// ============================================================================
+// Compute kernel
+// ============================================================================
+
+const compute_task_id: local_task_id = @get_local_task_id(10);
+
+task compute_spmv() void {
+    // Compute dot product for each row
+    var r: i16 = 0;
+    while (r < num_rows) : (r += 1) {
+        const start = row_offsets[r];
+        const end = row_offsets[r + 1];
+        const row_len = end - start;
+        
+        var dot_product: f32 = 0.0;
+        
+        // Dot product: sum(matrix_val[i] * vector_val[i])
+        var i: i16 = 0;
+        while (i < row_len) : (i += 1) {
+            const idx = start + i;
+            dot_product += matrix_values[idx] * vector_values[idx];
+        }
+        
+        results[r] = dot_product;
+    }
+}
+
+// ============================================================================
+// Host-callable functions
+// ============================================================================
+
+// Function to trigger SpMV computation
+fn spmv() void {
+    @activate(compute_task_id);
+}
+
+// ============================================================================
+// Compile-time setup
+// ============================================================================
+
+comptime {
+    // Bind task to task ID
+    @bind_local_task(compute_spmv, compute_task_id);
+    
+    // Export function so host can call it
+    @export_symbol(spmv);
+    
+    // Export data symbols so host can access them
+    @export_symbol(row_offsets);
+    @export_symbol(num_rows);
+    @export_symbol(matrix_values);
+    @export_symbol(vector_values);
+    @export_symbol(results);
+}
