@@ -14,15 +14,22 @@ const sys_mod = @import_module("<memcpy/memcpy>", memcpy_params);
 // ============================================================================
 
 // Row structure (CSR-style)
-var row_offsets: [MAX_ROWS + 1]i16;   // Start index for each row
-var num_rows: i16 = 0;                 // Actual number of rows
+var row_offsets = @zeros([MAX_ROWS + 1]i32);   // Changed to i32
+var num_rows = @zeros([1]i32);
 
 // Matched pairs data
-var matrix_values: [TOTAL_NNZ]f32;    // Matrix values
-var vector_values: [TOTAL_NNZ]f32;    // Pre-gathered vector values
+var matrix_values = @zeros([TOTAL_NNZ]f32);    // Matrix values
+var vector_values = @zeros([TOTAL_NNZ]f32);    // Pre-gathered vector values
 
 // Results
-var results: [MAX_ROWS]f32;           // Output: y = A*x
+var results = @zeros([MAX_ROWS]f32);           // Output: y = A*x
+
+// Pointers for export
+var ptr_row_offsets: [*]i32 = &row_offsets;
+var ptr_num_rows: [*]i32 = &num_rows;          // Changed to i32
+var ptr_matrix_values: [*]f32 = &matrix_values;
+var ptr_vector_values: [*]f32 = &vector_values;
+const ptr_results: [*]f32 = &results;
 
 // ============================================================================
 // Compute kernel
@@ -31,11 +38,14 @@ var results: [MAX_ROWS]f32;           // Output: y = A*x
 const compute_task_id: local_task_id = @get_local_task_id(10);
 
 task compute_spmv() void {
+    // Get actual num_rows value (cast from i32 to i16 for loop)
+    const n_rows = @as(i16, num_rows[0]);
+    
     // Compute dot product for each row
     var r: i16 = 0;
-    while (r < num_rows) : (r += 1) {
-        const start = row_offsets[r];
-        const end = row_offsets[r + 1];
+    while (r < n_rows) : (r += 1) {
+        const start = @as(i16, row_offsets[r]);
+        const end = @as(i16, row_offsets[r + 1]);
         const row_len = end - start;
         
         var dot_product: f32 = 0.0;
@@ -49,6 +59,9 @@ task compute_spmv() void {
         
         results[r] = dot_product;
     }
+    
+    // CRITICAL: Unblock command stream for memcpy
+    sys_mod.unblock_cmd_stream();
 }
 
 // ============================================================================
@@ -68,13 +81,13 @@ comptime {
     // Bind task to task ID
     @bind_local_task(compute_spmv, compute_task_id);
     
-    // Export function so host can call it
+    // export function
     @export_symbol(spmv);
-    
-    // Export data symbols so host can access them
-    @export_symbol(row_offsets);
-    @export_symbol(num_rows);
-    @export_symbol(matrix_values);
-    @export_symbol(vector_values);
-    @export_symbol(results);
+
+    // Export pointers to data
+    @export_symbol(ptr_row_offsets, "row_offsets");
+    @export_symbol(ptr_num_rows, "num_rows");
+    @export_symbol(ptr_matrix_values, "matrix_values");
+    @export_symbol(ptr_vector_values, "vector_values");
+    @export_symbol(ptr_results, "results");
 }

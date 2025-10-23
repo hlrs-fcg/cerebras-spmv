@@ -1,4 +1,7 @@
-// single PE (1x1 grid)
+// layout.csl
+// Top-level file: Defines PE grid and parameters
+
+// For now: single PE (1x1 grid)
 param width: i16 = 1;
 param height: i16 = 1;
 
@@ -6,19 +9,27 @@ param height: i16 = 1;
 param TOTAL_NNZ: i16 = 50;    // Total nonzeros for this PE
 param MAX_ROWS: i16 = 20;     // Max rows this PE handles
 
-// Colors for memcpy (reserved by SDK)
-const memcpy_params = .{
+// Import memcpy parameter generator
+const memcpy = @import_module("<memcpy/get_params>", .{
     .width = width,
     .height = height,
-};
+});
 
 layout {
     @set_rectangle(width, height);
     
     // Configure the single PE at (0, 0)
     @set_tile_code(0, 0, "pe.csl", .{
-        .memcpy_params = memcpy_params,
+        .memcpy_params = memcpy.get_params(0),  // Get params for PE at x=0
         .TOTAL_NNZ = TOTAL_NNZ,
         .MAX_ROWS = MAX_ROWS,
     });
+    
+    // Export symbols so host can access them
+    @export_name("row_offsets", [*]i32, true);
+    @export_name("num_rows", [*]i32, true);
+    @export_name("matrix_values", [*]f32, true);
+    @export_name("vector_values", [*]f32, true);
+    @export_name("results", [*]f32, false);
+    @export_name("spmv", fn()void);
 }
