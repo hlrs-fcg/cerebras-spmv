@@ -78,9 +78,7 @@ Examples:
 
     total_start = time.time()
 
-    logger.info("="*60)
-    logger.info("SpMV CSL Multi-PE Implementation")
-    logger.info("="*60 + "\n")
+    logger.info("SpMV - Multi-PE Implementation")
 
     # Fabric constraints based on architecture
     if args.arch == 'wse3':
@@ -94,12 +92,10 @@ Examples:
     max_height = fabric_dims[1] - fabric_offsets[1]
 
     # Generate test matrix
-    logger.info(f"Generating random matrix: {args.rows}×{args.cols}, density={args.density}")
+    logger.info(f"Matrix: {args.rows}×{args.cols}, density={args.density}")
     A = generate_random_sparse_matrix(args.rows, args.cols, args.density, args.seed)
     x = np.random.randint(0, 100, size=args.cols, dtype=np.int32).astype(np.float32)
-
-    logger.info(f"Matrix: {A.shape}, NNZ: {A.nnz}")
-    logger.info(f"Vector: {x.shape}\n")
+    logger.info(f"NNZ: {A.nnz}")
 
     # Show PE suggestions if requested
     if args.suggest_pes:
@@ -113,7 +109,7 @@ Examples:
         logger.error(str(e))
         return 1
 
-    logger.info(f"Number of PEs: {num_pes}\n")
+    logger.info(f"Number of PEs: {num_pes}")
 
     # Validate num_pes is reasonable
     if num_pes < 1:

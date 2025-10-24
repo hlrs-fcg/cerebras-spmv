@@ -114,13 +114,10 @@ def suggest_pe_counts(matrix_nnz: int, matrix_rows: int,
     min_pes = calculate_min_pes_needed(matrix_nnz, matrix_rows)
     max_pes = calculate_max_pes_useful(matrix_rows, max_width, max_height)
 
-    logger.info("="*60)
-    logger.info("PE Count Suggestions")
-    logger.info("="*60)
-    logger.info(f"Minimum needed (memory):  {min_pes:>6} PEs")
-    logger.info(f"Maximum useful (rows):    {max_pes:>6} PEs")
-    logger.info("")
-    logger.info("Recommended options:")
+    logger.info("PE Count Suggestions:")
+    logger.info(f"  Minimum (memory):  {min_pes:>6} PEs")
+    logger.info(f"  Maximum (useful):  {max_pes:>6} PEs")
+    logger.info("\nRecommended options:")
 
     # Generate some good intermediate options
     options = []
@@ -142,11 +139,9 @@ def suggest_pe_counts(matrix_nnz: int, matrix_rows: int,
             options.append((n, rows_per_pe, nnz_per_pe, memory_per_pe, memory_pct, grid_str))
 
     if options:
-        logger.info(f"{'PEs':>6} | {'Grid':>8} | {'Rows/PE':>8} | {'NNZ/PE':>8} | {'Memory':>10}")
-        logger.info("-" * 60)
+        logger.info(f"  {'PEs':>6} | {'Grid':>8} | {'Rows/PE':>8} | {'NNZ/PE':>8} | {'Memory':>10}")
+        logger.info("  " + "-" * 58)
         for n, rows, nnz, mem, pct, grid in options:
-            logger.info(f"{n:>6} | {grid:>8} | {rows:>8.1f} | {nnz:>8.1f} | {mem:>6.0f} ({pct:>4.1f}%)")
+            logger.info(f"  {n:>6} | {grid:>8} | {rows:>8.1f} | {nnz:>8.1f} | {mem:>6.0f} ({pct:>4.1f}%)")
     else:
         logger.warning("No valid PE counts found in range!")
-
-    logger.info("="*60 + "\n")

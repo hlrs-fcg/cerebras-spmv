@@ -36,27 +36,18 @@ def run_spmv_on_device(
     spmv.prepare_matched_pairs(pe_data, vector_x)
 
     # Print distribution summary
-    logger.info("="*60)
-    logger.info("Multi-PE Data Summary")
-    logger.info("="*60)
-
-    # Only show non-empty PEs
     non_empty = [pe for pe in pe_data if pe['num_rows'] > 0]
+    logger.info(f"Active PEs: {len(non_empty)}/{num_pes}")
+
     if len(non_empty) <= 10:
         for pe in non_empty:
-            logger.info(f"PE {pe['pe_id']}:")
-            logger.info(f"  Rows: {pe['num_rows']}")
-            logger.info(f"  NNZ: {pe['total_nnz']}")
+            logger.debug(f"PE {pe['pe_id']}: {pe['num_rows']} rows, {pe['total_nnz']} NNZ")
     else:
-        # Show summary
-        logger.info(f"Active PEs: {len(non_empty)}/{num_pes}")
-        logger.info(f"First PE: {non_empty[0]['num_rows']} rows, {non_empty[0]['total_nnz']} NNZ")
-        logger.info(f"Last PE: {non_empty[-1]['num_rows']} rows, {non_empty[-1]['total_nnz']} NNZ")
-
-    logger.info("="*60 + "\n")
+        logger.debug(f"First PE: {non_empty[0]['num_rows']} rows, {non_empty[0]['total_nnz']} NNZ")
+        logger.debug(f"Last PE: {non_empty[-1]['num_rows']} rows, {non_empty[-1]['total_nnz']} NNZ")
 
     # Initialize SDK runtime
-    logger.info("Initializing SdkRuntime...")
+    logger.debug("Initializing SdkRuntime...")
     with SdkRuntime(artifact_path, suppress_simfab_trace=True, disable_version_check=True) as runner:
 
         # Get symbol IDs
@@ -67,7 +58,7 @@ def run_spmv_on_device(
         sym_results = runner.get_id("results")
 
         # Send data to ALL PEs
-        logger.info("Sending data to PEs...")
+        logger.debug("Sending data to PEs...")
         memcpy_h2d_start = time.time()
 
         for pe in pe_data:
@@ -143,17 +134,17 @@ def run_spmv_on_device(
             )
 
         memcpy_h2d_time = time.time() - memcpy_h2d_start
-        logger.info(f"✅ Data sent to all PEs ({memcpy_h2d_time:.3f}s)")
+        logger.info(f"Data transfer H2D: {memcpy_h2d_time:.3f}s")
 
         # Launch computation on all PEs
-        logger.info("Launching SpMV computation...")
+        logger.debug("Launching SpMV computation...")
         compute_start = time.time()
         runner.launch("spmv", nonblock=False)
         compute_time = time.time() - compute_start
-        logger.info(f"✅ Computation complete ({compute_time:.3f}s)")
+        logger.info(f"Computation: {compute_time:.3f}s")
 
         # Retrieve results from ALL PEs
-        logger.info("Retrieving results from PEs...")
+        logger.debug("Retrieving results from PEs...")
         memcpy_d2h_start = time.time()
 
         all_results = []
@@ -181,7 +172,7 @@ def run_spmv_on_device(
             all_results.append(results_raw)
 
         memcpy_d2h_time = time.time() - memcpy_d2h_start
-        logger.info(f"✅ Results retrieved from all PEs ({memcpy_d2h_time:.3f}s)")
+        logger.info(f"Data transfer D2H: {memcpy_d2h_time:.3f}s")
 
     # Gather results using prototype logic
     result_vector = spmv.gather_results(pe_data, all_results)

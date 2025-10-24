@@ -26,20 +26,18 @@ def compile_csl(
     out_path: str = "out"
 ):
     """Compile the CSL code using SdkCompiler."""
-    logger.info("="*60)
-    logger.info("Compiling CSL code")
-    logger.info("="*60)
-    logger.info(f"  PE grid: {width}×{height}")
-    logger.info(f"  TOTAL_NNZ per PE: {total_nnz_per_pe}")
-    logger.info(f"  MAX_ROWS per PE: {max_rows_per_pe}")
-    logger.info(f"  Architecture: {arch}")
-    logger.info(f"  Fabric dims: {fabric_dims}")
+    logger.info("Compiling CSL...")
+    logger.debug(f"  PE grid: {width}×{height}")
+    logger.debug(f"  TOTAL_NNZ per PE: {total_nnz_per_pe}")
+    logger.debug(f"  MAX_ROWS per PE: {max_rows_per_pe}")
+    logger.debug(f"  Architecture: {arch}")
+    logger.debug(f"  Fabric dims: {fabric_dims}")
 
     # Ensure out_path exists and is absolute
     out_path = str(Path(out_path).resolve())
     Path(out_path).mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"  Output path: {out_path}")
+    logger.debug(f"  Output path: {out_path}")
 
     # Build compilation arguments
     ARGS = (
@@ -51,7 +49,7 @@ def compile_csl(
         f"TOTAL_NNZ:{total_nnz_per_pe},MAX_ROWS:{max_rows_per_pe}"
     )
 
-    logger.info(f"  Compilation args: {ARGS}")
+    logger.debug(f"  Compilation args: {ARGS}")
 
     # Compile using SdkCompiler
     compile_start = time.time()
@@ -87,10 +85,8 @@ def compile_csl(
     with open(artifact_file, "w", encoding="utf8") as f:
         json.dump(artifact_data, f, indent=2)
 
-    logger.info("✅ Compilation successful!")
-    logger.info(f"  Compile time: {compile_time:.2f} seconds")
-    logger.info(f"  Artifact ID: {artifact_id}")
-    logger.info(f"  Artifact saved to: {artifact_file.resolve()}")
-    logger.info("="*60 + "\n")
+    logger.info(f"✅ Compilation successful ({compile_time:.2f}s)")
+    logger.debug(f"  Artifact ID: {artifact_id}")
+    logger.debug(f"  Artifact saved to: {artifact_file.resolve()}")
 
     return out_path, artifact_id, compile_time

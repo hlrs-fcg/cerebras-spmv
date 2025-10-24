@@ -58,54 +58,30 @@ def check_memory_feasibility(pe_data: list, max_memory: int = 48_000) -> tuple:
 
 def print_memory_analysis(pe_data: list, max_memory: int = 48_000):
     """Print detailed memory analysis for all PEs."""
-    logger.info("="*60)
-    logger.info("Memory Analysis")
-    logger.info("="*60)
-
     # Only show non-empty PEs and first/last few
     non_empty = [pe for pe in pe_data if pe['num_rows'] > 0]
-
-    if len(non_empty) <= 10:
-        # Show all if not too many
-        pes_to_show = non_empty
-    else:
-        # Show first 3 and last 3
-        pes_to_show = non_empty[:3] + non_empty[-3:]
-
-    for i, pe in enumerate(pes_to_show):
-        if i == 3 and len(non_empty) > 6:
-            logger.info("... (%d PEs omitted) ..." % (len(non_empty) - 6))
-
-        memory = calculate_memory_per_pe(pe['num_rows'], pe['total_nnz'])
-        percentage = (memory / max_memory) * 100
-
-        row_offsets_mem = 4 * (pe['num_rows'] + 1)
-        matrix_values_mem = 4 * pe['total_nnz']
-        vector_values_mem = 4 * pe['total_nnz']
-        results_mem = 4 * pe['num_rows']
-
-        logger.info(f"PE {pe['pe_id']}:")
-        logger.info(f"  Rows: {pe['num_rows']}, NNZ: {pe['total_nnz']}")
-        logger.info("  Memory breakdown:")
-        logger.info(f"    row_offsets:    {row_offsets_mem:>6} bytes")
-        logger.info(f"    matrix_values:  {matrix_values_mem:>6} bytes")
-        logger.info(f"    vector_values:  {vector_values_mem:>6} bytes")
-        logger.info(f"    results:        {results_mem:>6} bytes")
-        logger.info(f"    num_rows:       {4:>6} bytes")
-        logger.info(f"  Total: {memory:>6} bytes ({memory/1024:.2f} KB, {percentage:.1f}% of limit)")
-
-        if memory > max_memory:
-            logger.error("  ❌ EXCEEDS 48 KB LIMIT!")
-        else:
-            logger.info("  ✅ Within limit")
 
     max_memory_used = max(calculate_memory_per_pe(pe['num_rows'], pe['total_nnz'])
                           for pe in pe_data)
     avg_memory_used = np.mean([calculate_memory_per_pe(pe['num_rows'], pe['total_nnz'])
                                 for pe in pe_data])
 
-    logger.info("\nAggregate Statistics:")
-    logger.info(f"  Max memory/PE:  {max_memory_used:>6} bytes ({max_memory_used/1024:.2f} KB)")
-    logger.info(f"  Avg memory/PE:  {avg_memory_used:>6.0f} bytes ({avg_memory_used/1024:.2f} KB)")
-    logger.info(f"  Memory limit:   {max_memory:>6} bytes ({max_memory/1024:.2f} KB)")
-    logger.info("="*60 + "\n")
+    logger.info(f"Memory: max {max_memory_used/1024:.2f} KB/PE, avg {avg_memory_used/1024:.2f} KB/PE (limit: {max_memory/1024:.0f} KB)")
+
+    # Show detailed breakdown in debug mode
+    if len(non_empty) <= 10:
+        pes_to_show = non_empty
+    else:
+        pes_to_show = non_empty[:3] + non_empty[-3:]
+
+    for i, pe in enumerate(pes_to_show):
+        if i == 3 and len(non_empty) > 6:
+            logger.debug("... (%d PEs omitted) ..." % (len(non_empty) - 6))
+
+        memory = calculate_memory_per_pe(pe['num_rows'], pe['total_nnz'])
+        percentage = (memory / max_memory) * 100
+
+        logger.debug(f"PE {pe['pe_id']}: {pe['num_rows']} rows, {pe['total_nnz']} NNZ → {memory/1024:.2f} KB ({percentage:.1f}%)")
+
+        if memory > max_memory:
+            logger.error(f"  PE {pe['pe_id']} EXCEEDS 48 KB LIMIT!")

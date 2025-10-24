@@ -64,14 +64,11 @@ def print_grid_info(width: int, height: int, num_pes: int,
                    fabric_dims: tuple = (762, 1172),
                    fabric_offsets: tuple = (4, 1)):
     """Print visual representation of PE grid with fabric info."""
-    logger.info("="*60)
-    logger.info(f"PE Grid Layout: {width}×{height} ({num_pes} PEs)")
-    logger.info("="*60)
-    logger.info(f"Fabric dimensions: {fabric_dims[0]}×{fabric_dims[1]}")
-    logger.info(f"Fabric offsets: {fabric_offsets}")
-    logger.info(f"Usable area: {fabric_dims[0]-fabric_offsets[0]}×{fabric_dims[1]-fabric_offsets[1]}")
-    logger.info(f"Grid utilization: {(width*height)/(fabric_dims[0]*fabric_dims[1])*100:.2f}%")
-    logger.info("")
+    logger.info(f"PE Grid: {width}×{height} ({num_pes} PEs)")
+    logger.debug(f"Fabric dimensions: {fabric_dims[0]}×{fabric_dims[1]}")
+    logger.debug(f"Fabric offsets: {fabric_offsets}")
+    logger.debug(f"Usable area: {fabric_dims[0]-fabric_offsets[0]}×{fabric_dims[1]-fabric_offsets[1]}")
+    logger.debug(f"Grid utilization: {(width*height)/(fabric_dims[0]*fabric_dims[1])*100:.2f}%")
 
     # Visual grid (limit display for large grids)
     if width <= 20 and height <= 20:
@@ -80,16 +77,9 @@ def print_grid_info(width: int, height: int, num_pes: int,
             for x in range(width):
                 pe_id = y * width + x
                 row += f"[PE{pe_id:3d}] "
-            logger.info(row)
+            logger.debug(row)
     else:
-        logger.info(f"Grid too large to display ({width}×{height})")
-        logger.info("Corners:")
-        logger.info("  Top-left:     PE 0")
-        logger.info(f"  Top-right:    PE {width-1}")
-        logger.info(f"  Bottom-left:  PE {(height-1)*width}")
-        logger.info(f"  Bottom-right: PE {height*width-1}")
-
-    logger.info("="*60 + "\n")
+        logger.debug(f"Grid corners: PE 0, PE {width-1}, PE {(height-1)*width}, PE {height*width-1}")
 
 
 def validate_grid_fits_fabric(width: int, height: int,
