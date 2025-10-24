@@ -11,6 +11,7 @@ from pathlib import Path
 import json
 import logging
 import sys
+import time
 
 from cerebras.sdk.client import SdkRuntime, SdkCompiler
 from cerebras.appliance.pb.sdk.sdk_common_pb2 import MemcpyDataType, MemcpyOrder
@@ -21,6 +22,7 @@ from spmv_prototype import generate_random_sparse_matrix, MatchedPairsSpMV, vali
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
+    #level = logging.DEBUG if args.verbose else logging.INFO,
     format='%(levelname)s: %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -133,6 +135,7 @@ def run_spmv_on_device(
 
     # Initialize SDK runtime
     logger.info("Initializing SdkRuntime...")
+    runtime_start = time.perf_counter()
     with SdkRuntime(artifact_path, suppress_simfab_trace=True, disable_version_check=True) as runner:
 
         # Get symbol IDs
@@ -213,6 +216,10 @@ def run_spmv_on_device(
             nonblock=False
         )
 
+        elapsed = time.perf_counter() - runtime_start
+        print(f"runtime took {elapsed:.4f}s")
+
+
         logger.info("✅ Results retrieved")
 
     # Reconstruct full result vector
@@ -224,6 +231,7 @@ def run_spmv_on_device(
 
 
 def main():
+    program_start = time.perf_counter()
     parser = argparse.ArgumentParser(description='SpMV CSL Single PE Test')
     parser.add_argument('--rows', type=int, default=10, help='Number of rows')
     parser.add_argument('--cols', type=int, default=10, help='Number of columns')
@@ -290,6 +298,9 @@ def main():
 
     # Validate
     passed = validate_results(y_computed, y_reference, tolerance=1e-4)
+
+    program_time = time.perf_counter() - program_start
+    print(f"program took: {program_time:.4f}s")
 
     if passed:
         logger.info("\n🎉 SUCCESS! SpMV on CSL works correctly!")
