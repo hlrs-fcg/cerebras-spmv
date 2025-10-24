@@ -1,135 +1,217 @@
 #!/usr/bin/env python3
 """
-SpMV Approach 1: Matched Pairs Prototype
-Tests data distribution before CSL implementation
+SpMV Matched Pairs Prototype - Phase 1
+Pure Python implementation to test data distribution and computation logic
+before implementing in CSL.
 """
 
+import argparse
 import numpy as np
 import scipy.sparse as sp
-from typing import List, Dict
-import argparse
 import logging
 
+
 class MatchedPairsSpMV:
+    """
+    Prototype implementation of SpMV using matched pairs approach.
+    Pre-gathers vector values on host to create matched (matrix_val, vector_val) pairs.
+    """
+    
     def __init__(self, csr_matrix: sp.csr_matrix, num_pes: int):
+        """
+        Initialize SpMV with a CSR matrix.
+        
+        Args:
+            csr_matrix: Input sparse matrix in CSR format
+            num_pes: Number of PEs to distribute across
+        """
         self.csr_matrix = csr_matrix
         self.num_pes = num_pes
-        self.num_rows = csr_matrix.shape[0]
-        self.num_cols = csr_matrix.shape[1]
-        self.total_nnz = csr_matrix.nnz
         
-    def distribute_by_nnz(self) -> List[Dict]:
+    def distribute_by_nnz(self) -> list:
         """
-        Distribute rows to PEs balanced by NNZ count.
-        Returns list of PE data structures.
+        Distribute rows sequentially across PEs to balance NNZ.
+        Simple greedy approach: fill each PE until target is reached.
         """
-        target_nnz_per_pe = self.total_nnz // self.num_pes
-        logging.info(f"Target NNZ per PE: {target_nnz_per_pe}")
+        target_nnz_per_pe = self.csr_matrix.nnz / self.num_pes
+        
+        logging.info(f"Distributing {self.csr_matrix.shape[0]} rows over {self.num_pes} PEs...")
+        logging.info(f"Target NNZ per PE: {target_nnz_per_pe:.0f}")
         
         pe_data = []
-        for pe_id in range(self.num_pes):
+        current_pe_id = 0
+        current_nnz = 0
+        current_rows = []
+        
+        for row in range(self.csr_matrix.shape[0]):
+            row_nnz = self.csr_matrix.indptr[row+1] - self.csr_matrix.indptr[row]
+            
+            current_rows.append(row)
+            current_nnz += row_nnz
+            
+            # Check if we should finalize this PE
+            # Don't finalize if we're on the last PE (let it accumulate all remaining)
+            should_finalize = False
+            
+            if current_pe_id < self.num_pes - 1:
+                # Not the last PE: finalize when we hit target
+                if current_nnz >= target_nnz_per_pe:
+                    should_finalize = True
+            else:
+                # Last PE: only finalize at the very end (handled after loop)
+                pass
+            
+            if should_finalize:
+                # Finalize current PE
+                pe_dict = {
+                    'pe_id': current_pe_id,
+                    'row_ids': current_rows.copy(),
+                    'total_nnz': current_nnz,
+                    'num_rows': len(current_rows)
+                }
+                pe_data.append(pe_dict)
+                
+                logging.debug(f"PE {current_pe_id}: {len(current_rows)} rows, {current_nnz} NNZ")
+                
+                # Move to next PE
+                current_pe_id += 1
+                current_rows = []
+                current_nnz = 0
+        
+        # Finalize the last PE with any remaining rows
+        if current_rows:
+            pe_dict = {
+                'pe_id': current_pe_id,
+                'row_ids': current_rows.copy(),
+                'total_nnz': current_nnz,
+                'num_rows': len(current_rows)
+            }
+            pe_data.append(pe_dict)
+            
+            logging.debug(f"PE {current_pe_id}: {len(current_rows)} rows, {current_nnz} NNZ (final)")
+        
+        # Verify we created all PEs
+        while len(pe_data) < self.num_pes:
+            # Create empty PE if needed
             pe_data.append({
-                'pe_id': pe_id,
+                'pe_id': len(pe_data),
                 'row_ids': [],
-                'row_offsets': [0],
-                'matrix_values': [],
-                'vector_values': [],
                 'total_nnz': 0,
                 'num_rows': 0
             })
+            logging.warning(f"PE {len(pe_data)-1}: empty (no rows assigned)")
         
-        current_pe = 0
-        current_nnz = 0
-        
-        for row in range(self.num_rows):
-            row_start = self.csr_matrix.indptr[row]
-            row_end = self.csr_matrix.indptr[row + 1]
-            row_nnz = row_end - row_start
+        # Log load balancing quality
+        nnz_counts = [pe['total_nnz'] for pe in pe_data if pe['total_nnz'] > 0]
+        if nnz_counts:
+            min_nnz = min(nnz_counts)
+            max_nnz = max(nnz_counts)
+            avg_nnz = np.mean(nnz_counts)
+            imbalance = (max_nnz - min_nnz) / avg_nnz * 100 if avg_nnz > 0 else 0
             
-            # Switch to next PE if current is overloaded (but not last PE)
-            if current_nnz + row_nnz > target_nnz_per_pe and current_pe < self.num_pes - 1:
-                logging.debug(f"PE {current_pe} filled with {current_nnz} NNZ, switching to PE {current_pe + 1}")
-                current_pe += 1
-                current_nnz = 0
-            
-            # Assign row to current PE
-            if row_nnz > 0:
-                pe_data[current_pe]['row_ids'].append(row)
-                pe_data[current_pe]['total_nnz'] += row_nnz
-                pe_data[current_pe]['num_rows'] += 1
-                
-                # Store offset for this row
-                pe_data[current_pe]['row_offsets'].append(
-                    pe_data[current_pe]['row_offsets'][-1] + row_nnz
-                )
-                
-                current_nnz += row_nnz
+            logging.info(f"Load balancing:")
+            logging.info(f"  Min NNZ/PE: {min_nnz}")
+            logging.info(f"  Max NNZ/PE: {max_nnz}")
+            logging.info(f"  Avg NNZ/PE: {avg_nnz:.1f}")
+            logging.info(f"  Imbalance: {imbalance:.1f}%")
         
         return pe_data
     
-    def prepare_matched_pairs(self, pe_data: List[Dict], vector_x: np.ndarray):
+    def prepare_matched_pairs(self, pe_data: list, vector_x: np.ndarray):
         """
-        For each PE, gather vector values to create matched pairs.
-        Modifies pe_data in place.
+        Prepare matched pairs for each PE by pre-gathering vector values.
+        
+        This is the key transformation:
+        - Input: matrix values and column indices
+        - Output: matrix values and corresponding vector values (matched pairs)
+        
+        Args:
+            pe_data: List of PE data dictionaries
+            vector_x: Input vector
         """
         for pe in pe_data:
-            matrix_vals = []
-            vector_vals = []
+            if pe['num_rows'] == 0:
+                # Empty PE
+                pe['row_offsets'] = np.array([0], dtype=np.int16)
+                pe['matrix_values'] = np.array([], dtype=np.float32)
+                pe['vector_values'] = np.array([], dtype=np.float32)
+                continue
             
-            for row in pe['row_ids']:
-                row_start = self.csr_matrix.indptr[row]
-                row_end = self.csr_matrix.indptr[row + 1]
-                
-                # Get matrix values
-                mat_vals = self.csr_matrix.data[row_start:row_end]
-                
-                # Gather corresponding vector values
-                col_indices = self.csr_matrix.indices[row_start:row_end]
-                vec_vals = vector_x[col_indices]
-                
-                matrix_vals.extend(mat_vals)
-                vector_vals.extend(vec_vals)
-                
-                # Debug output for first few rows
-                if len(pe['row_ids']) <= 5 or row < 5:
-                    pairs_str = ", ".join(
-                        f"(col={col_indices[i]}, mat={mat_vals[i]:.3f}, vec={vec_vals[i]})"
-                        for i in range(len(mat_vals))
-                    )
-                    logging.debug(f"PE {pe['pe_id']}, Row {row}: {pairs_str}")
+            # Build CSR structure for this PE's rows
+            row_offsets = [0]
+            matrix_values = []
+            vector_values = []
             
-            pe['matrix_values'] = np.array(matrix_vals, dtype=np.float32)
-            pe['vector_values'] = np.array(vector_vals, dtype=np.float32)
-            pe['row_offsets'] = np.array(pe['row_offsets'], dtype=np.int16)
-            pe['row_ids'] = np.array(pe['row_ids'], dtype=np.int16)
+            for local_row_idx, global_row in enumerate(pe['row_ids']):
+                # Get data for this row from original matrix
+                row_start = self.csr_matrix.indptr[global_row]
+                row_end = self.csr_matrix.indptr[global_row + 1]
+                
+                # Matrix values for this row
+                row_matrix_vals = self.csr_matrix.data[row_start:row_end]
+                
+                # Column indices for this row
+                row_col_indices = self.csr_matrix.indices[row_start:row_end]
+                
+                # Gather vector values (this is the "matched pairs" transformation!)
+                row_vector_vals = vector_x[row_col_indices]
+                
+                # Append to PE's data
+                matrix_values.extend(row_matrix_vals)
+                vector_values.extend(row_vector_vals)
+                
+                # Update row offset
+                row_offsets.append(len(matrix_values))
+            
+            # Store in PE data
+            pe['row_offsets'] = np.array(row_offsets, dtype=np.int16)
+            pe['matrix_values'] = np.array(matrix_values, dtype=np.float32)
+            pe['vector_values'] = np.array(vector_values, dtype=np.float32)
+            
+            logging.debug(f"PE {pe['pe_id']}: prepared {len(matrix_values)} matched pairs")
     
-    def compute_on_pe(self, pe: Dict) -> np.ndarray:
+    def compute_on_pe(self, pe: dict) -> np.ndarray:
         """
-        Simulate computation on a single PE.
-        Returns result vector for rows assigned to this PE.
+        Simulate PE computation: SpMV using matched pairs.
+        
+        This mimics what the CSL kernel will do on the actual PE.
+        
+        Args:
+            pe: PE data dictionary with matched pairs
+            
+        Returns:
+            Result vector for this PE's rows
         """
+        if pe['num_rows'] == 0:
+            return np.array([], dtype=np.float32)
+        
         results = np.zeros(pe['num_rows'], dtype=np.float32)
         
-        for r in range(pe['num_rows']):
-            start = pe['row_offsets'][r]
-            end = pe['row_offsets'][r + 1]
+        for local_row in range(pe['num_rows']):
+            start = pe['row_offsets'][local_row]
+            end = pe['row_offsets'][local_row + 1]
             
-            # Dot product: sum(matrix_val * vector_val)
-            dot_product = np.sum(
-                pe['matrix_values'][start:end] * pe['vector_values'][start:end]
-            )
-            results[r] = dot_product
+            # Dot product using matched pairs
+            dot_product = 0.0
+            for i in range(start, end):
+                dot_product += pe['matrix_values'][i] * pe['vector_values'][i]
             
-            logging.debug(f"PE {pe['pe_id']}, local_row={r}, global_row={pe['row_ids'][r]}: "
-                         f"dot_product={dot_product:.6f}")
+            results[local_row] = dot_product
         
         return results
     
-    def gather_results(self, pe_data: List[Dict], pe_results: List[np.ndarray]) -> np.ndarray:
+    def gather_results(self, pe_data: list, pe_results: list) -> np.ndarray:
         """
-        Gather results from all PEs into final result vector.
+        Gather results from all PEs into a single result vector.
+        
+        Args:
+            pe_data: List of PE data dictionaries
+            pe_results: List of result arrays from each PE
+            
+        Returns:
+            Complete result vector
         """
-        result_vector = np.zeros(self.num_rows, dtype=np.float32)
+        result_vector = np.zeros(self.csr_matrix.shape[0], dtype=np.float32)
         
         for pe, results in zip(pe_data, pe_results):
             for local_idx, global_row in enumerate(pe['row_ids']):
@@ -137,29 +219,26 @@ class MatchedPairsSpMV:
         
         return result_vector
     
-    def print_distribution_stats(self, pe_data: List[Dict]):
-        """Print statistics about the distribution."""
+    def print_distribution_stats(self, pe_data: list):
+        """Print statistics about the row distribution."""
         logging.info("\n" + "="*60)
         logging.info("Distribution Statistics")
         logging.info("="*60)
         
         for pe in pe_data:
-            logging.info(f"PE {pe['pe_id']}:")
-            logging.info(f"  Rows: {pe['num_rows']}")
-            logging.info(f"  NNZ:  {pe['total_nnz']}")
-            logging.info(f"  Data size: {pe['total_nnz'] * 8} bytes (matrix + vector)")
             if pe['num_rows'] > 0:
-                logging.info(f"  Avg NNZ/row: {pe['total_nnz'] / pe['num_rows']:.2f}")
+                logging.info(f"PE {pe['pe_id']:3d}: {pe['num_rows']:4d} rows, "
+                           f"{pe['total_nnz']:6d} NNZ")
         
+        # Overall stats
+        total_rows = sum(pe['num_rows'] for pe in pe_data)
         total_nnz = sum(pe['total_nnz'] for pe in pe_data)
-        max_nnz = max(pe['total_nnz'] for pe in pe_data) if pe_data else 0
-        min_nnz = min(pe['total_nnz'] for pe in pe_data) if pe_data else 0
+        active_pes = sum(1 for pe in pe_data if pe['num_rows'] > 0)
         
-        logging.info(f"\nTotal NNZ: {total_nnz}")
-        logging.info(f"Max NNZ on single PE: {max_nnz}")
-        logging.info(f"Min NNZ on single PE: {min_nnz}")
-        if total_nnz > 0:
-            logging.info(f"Load imbalance: {max_nnz / (total_nnz / self.num_pes):.2f}x")
+        logging.info("-"*60)
+        logging.info(f"Total rows: {total_rows}")
+        logging.info(f"Total NNZ: {total_nnz}")
+        logging.info(f"Active PEs: {active_pes}/{self.num_pes}")
         logging.info("="*60 + "\n")
 
 
@@ -248,15 +327,15 @@ def main():
     log_level = getattr(logging, args.log.upper())
     logging.basicConfig(
         level=log_level,
-        format='%(levelname)s:%(message)s'
+        format='%(levelname)s: %(message)s'
     )
     
     # Generate test data
     logging.info(f"Generating random matrix: {args.rows}x{args.cols}, density={args.density}")
     A = generate_random_sparse_matrix(args.rows, args.cols, args.density, args.seed)
-    x = np.random.randint(0, 100, size=args.cols, dtype=np.int32)
+    x = np.random.randint(0, 100, size=args.cols, dtype=np.int32).astype(np.float32)
     
-    logging.debug(f"Matrix NNZ: {A.nnz}")
+    logging.info(f"Matrix: {A.shape}, NNZ: {A.nnz}")
     logging.debug(f"Vector x: {x}")
     
     # Initialize SpMV
