@@ -1,90 +1,86 @@
-// pe.csl
-// Kernel code that runs on each PE
-
-// Parameters passed from layout
+// with loop unrolling
 param memcpy_params: comptime_struct;
 param TOTAL_NNZ: i16;
 param MAX_ROWS: i16;
 
-// Import memcpy module for host communication
 const sys_mod = @import_module("<memcpy/memcpy>", memcpy_params);
 
-// ============================================================================
-// Storage for SpMV data
-// ============================================================================
-
-// Row structure (CSR-style)
-var row_offsets = @zeros([MAX_ROWS + 1]i32);   // Changed to i32
+// Storage
+var row_offsets = @zeros([MAX_ROWS + 1]i32);
 var num_rows = @zeros([1]i32);
+var matrix_values = @zeros([TOTAL_NNZ]f32);
+var vector_values = @zeros([TOTAL_NNZ]f32);
+var results = @zeros([MAX_ROWS]f32);
 
-// Matched pairs data
-var matrix_values = @zeros([TOTAL_NNZ]f32);    // Matrix values
-var vector_values = @zeros([TOTAL_NNZ]f32);    // Pre-gathered vector values
-
-// Results
-var results = @zeros([MAX_ROWS]f32);           // Output: y = A*x
-
-// Pointers for export
+// Pointers
 var ptr_row_offsets: [*]i32 = &row_offsets;
-var ptr_num_rows: [*]i32 = &num_rows;          // Changed to i32
+var ptr_num_rows: [*]i32 = &num_rows;
 var ptr_matrix_values: [*]f32 = &matrix_values;
 var ptr_vector_values: [*]f32 = &vector_values;
 const ptr_results: [*]f32 = &results;
 
-// ============================================================================
-// Compute kernel
-// ============================================================================
+// Optimized dot product with 4-way unrolling
+fn dot_product_unrolled(start: i32, len: i32) f32 {
+    // Use 4 accumulators for instruction-level parallelism
+    var sum0: f32 = 0.0;
+    var sum1: f32 = 0.0;
+    var sum2: f32 = 0.0;
+    var sum3: f32 = 0.0;
+    
+    const unroll_factor: i32 = 4;
+    const main_iters = len / unroll_factor;
+    const remainder = len % unroll_factor;
+    
+    // Main unrolled loop - 4 operations can execute in parallel
+    var i: i32 = 0;
+    while (i < main_iters) : (i += 1) {
+        const base = start + i * unroll_factor;
+        sum0 += matrix_values[base + 0] * vector_values[base + 0];
+        sum1 += matrix_values[base + 1] * vector_values[base + 1];
+        sum2 += matrix_values[base + 2] * vector_values[base + 2];
+        sum3 += matrix_values[base + 3] * vector_values[base + 3];
+    }
+    
+    // Handle remainder elements
+    const base_rem = start + main_iters * unroll_factor;
+    var j: i32 = 0;
+    while (j < remainder) : (j += 1) {
+        sum0 += matrix_values[base_rem + j] * vector_values[base_rem + j];
+    }
+    
+    // Combine partial sums
+    return sum0 + sum1 + sum2 + sum3;
+}
 
+// Compute task
 const compute_task_id: local_task_id = @get_local_task_id(10);
 
 task compute_spmv() void {
-    // Get actual num_rows value (cast from i32 to i16 for loop)
-    const n_rows = @as(i16, num_rows[0]);
+    const n_rows = num_rows[0];
     
-    // Compute dot product for each row
-    var r: i16 = 0;
+    var r: i32 = 0;
     while (r < n_rows) : (r += 1) {
-        const start = @as(i16, row_offsets[r]);
-        const end = @as(i16, row_offsets[r + 1]);
+        const start = row_offsets[r];
+        const end = row_offsets[r + 1];
         const row_len = end - start;
         
-        var dot_product: f32 = 0.0;
-        
-        // Dot product: sum(matrix_val[i] * vector_val[i])
-        var i: i16 = 0;
-        while (i < row_len) : (i += 1) {
-            const idx = start + i;
-            dot_product += matrix_values[idx] * vector_values[idx];
+        if (row_len == 0) {
+            results[r] = 0.0;
+        } else {
+            results[r] = dot_product_unrolled(start, row_len);
         }
-        
-        results[r] = dot_product;
     }
     
-    // CRITICAL: Unblock command stream for memcpy
     sys_mod.unblock_cmd_stream();
 }
 
-// ============================================================================
-// Host-callable functions
-// ============================================================================
-
-// Function to trigger SpMV computation
 fn spmv() void {
     @activate(compute_task_id);
 }
 
-// ============================================================================
-// Compile-time setup
-// ============================================================================
-
 comptime {
-    // Bind task to task ID
     @bind_local_task(compute_spmv, compute_task_id);
-    
-    // export function
     @export_symbol(spmv);
-
-    // Export pointers to data
     @export_symbol(ptr_row_offsets, "row_offsets");
     @export_symbol(ptr_num_rows, "num_rows");
     @export_symbol(ptr_matrix_values, "matrix_values");
