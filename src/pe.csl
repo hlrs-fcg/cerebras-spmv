@@ -1,4 +1,5 @@
-// with loop unrolling
+// pe.csl - SIMD optimized with DSDs (TYPE-FIXED)
+
 param memcpy_params: comptime_struct;
 param TOTAL_NNZ: i16;
 param MAX_ROWS: i16;
@@ -19,37 +20,70 @@ var ptr_matrix_values: [*]f32 = &matrix_values;
 var ptr_vector_values: [*]f32 = &vector_values;
 const ptr_results: [*]f32 = &results;
 
-// Optimized dot product with 4-way unrolling
-fn dot_product_unrolled(start: i32, len: i32) f32 {
-    // Use 4 accumulators for instruction-level parallelism
-    var sum0: f32 = 0.0;
-    var sum1: f32 = 0.0;
-    var sum2: f32 = 0.0;
-    var sum3: f32 = 0.0;
+// SIMD chunk size - NOW i32 to match len!
+const CHUNK_SIZE: i32 = 32;
+var chunk_buffer = @zeros([32]f32);  // Array size is literal
+
+// SIMD dot product
+fn dot_product_simd(start: i32, len: i32) f32 {
+    var total_sum: f32 = 0.0;
     
-    const unroll_factor: i32 = 4;
-    const main_iters = len / unroll_factor;
-    const remainder = len % unroll_factor;
+    const num_full_chunks = len / CHUNK_SIZE;
+    const remainder = len % CHUNK_SIZE;
     
-    // Main unrolled loop - 4 operations can execute in parallel
+    // Process full chunks with SIMD
+    var chunk: i32 = 0;
+    while (chunk < num_full_chunks) : (chunk += 1) {
+        const offset = start + chunk * CHUNK_SIZE;
+        
+        // Create DSDs for SIMD operations
+        const mat_dsd = @get_dsd(mem1d_dsd, .{
+            .base_address = &matrix_values[offset],
+            .extent = 32  // Use literal, not CHUNK_SIZE
+        });
+        
+        const vec_dsd = @get_dsd(mem1d_dsd, .{
+            .base_address = &vector_values[offset],
+            .extent = 32
+        });
+        
+        const buf_dsd = @get_dsd(mem1d_dsd, .{
+            .base_address = &chunk_buffer,
+            .extent = 32
+        });
+        
+        // SIMD multiply: 8× f32/cycle!
+        @fmuls(buf_dsd, mat_dsd, vec_dsd);
+        
+        // Reduction
+        var chunk_sum: f32 = 0.0;
+        var i: i32 = 0;
+        while (i < 32) : (i += 1) {
+            chunk_sum += chunk_buffer[i];
+        }
+        total_sum += chunk_sum;
+    }
+    
+    // Handle remainder scalar
+    if (remainder > 0) {
+        const rem_start = start + num_full_chunks * CHUNK_SIZE;
+        var i: i32 = 0;
+        while (i < remainder) : (i += 1) {
+            total_sum += matrix_values[rem_start + i] * vector_values[rem_start + i];
+        }
+    }
+    
+    return total_sum;
+}
+
+// Scalar fallback for short rows
+fn dot_product_scalar(start: i32, len: i32) f32 {
+    var sum: f32 = 0.0;
     var i: i32 = 0;
-    while (i < main_iters) : (i += 1) {
-        const base = start + i * unroll_factor;
-        sum0 += matrix_values[base + 0] * vector_values[base + 0];
-        sum1 += matrix_values[base + 1] * vector_values[base + 1];
-        sum2 += matrix_values[base + 2] * vector_values[base + 2];
-        sum3 += matrix_values[base + 3] * vector_values[base + 3];
+    while (i < len) : (i += 1) {
+        sum += matrix_values[start + i] * vector_values[start + i];
     }
-    
-    // Handle remainder elements
-    const base_rem = start + main_iters * unroll_factor;
-    var j: i32 = 0;
-    while (j < remainder) : (j += 1) {
-        sum0 += matrix_values[base_rem + j] * vector_values[base_rem + j];
-    }
-    
-    // Combine partial sums
-    return sum0 + sum1 + sum2 + sum3;
+    return sum;
 }
 
 // Compute task
@@ -57,6 +91,7 @@ const compute_task_id: local_task_id = @get_local_task_id(10);
 
 task compute_spmv() void {
     const n_rows = num_rows[0];
+    const SIMD_THRESHOLD: i32 = 16;
     
     var r: i32 = 0;
     while (r < n_rows) : (r += 1) {
@@ -66,8 +101,10 @@ task compute_spmv() void {
         
         if (row_len == 0) {
             results[r] = 0.0;
+        } else if (row_len < SIMD_THRESHOLD) {
+            results[r] = dot_product_scalar(start, row_len);
         } else {
-            results[r] = dot_product_unrolled(start, row_len);
+            results[r] = dot_product_simd(start, row_len);
         }
     }
     
