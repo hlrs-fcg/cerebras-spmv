@@ -12,6 +12,9 @@ import time
 # Import our prototype code
 from spmv_prototype import generate_random_sparse_matrix, MatchedPairsSpMV, validate_results
 
+# Import benchmarking
+from tests.benchmark import BenchmarkResult, save_benchmark
+
 # Import modularized components
 from spmv_runner.core import (
     calculate_pe_grid,
@@ -74,6 +77,8 @@ Examples:
     parser.add_argument('--arch', type=str, default='wse3',
                        choices=['wse2', 'wse3'],
                        help='Target architecture')
+    parser.add_argument('--save-benchmark', type=str, default='tests/benchmark_results.csv',
+                       help='Path to save benchmark results CSV (use empty string to disable)')
     args = parser.parse_args()
 
     total_start = time.time()
@@ -204,6 +209,64 @@ Examples:
 
     # Print timing summary
     print_timing_summary(compile_time, timing_info, total_time)
+
+    # Calculate load balancing statistics
+    nnz_counts = [pe['total_nnz'] for pe in pe_data_temp if pe['total_nnz'] > 0]
+    if nnz_counts:
+        min_nnz_pe = min(nnz_counts)
+        max_nnz_pe = max(nnz_counts)
+        avg_nnz_pe = np.mean(nnz_counts)
+        load_imbalance = (max_nnz_pe - min_nnz_pe) / avg_nnz_pe * 100 if avg_nnz_pe > 0 else 0
+    else:
+        min_nnz_pe = max_nnz_pe = avg_nnz_pe = load_imbalance = 0
+
+    # Calculate memory statistics
+    avg_memory = np.mean([check_memory_feasibility([pe])[1] for pe in pe_data_temp])
+    memory_utilization = (max_memory / 48000) * 100 if max_memory > 0 else 0
+
+    # Count active vs idle PEs
+    num_active = sum(1 for pe in pe_data_temp if pe['num_rows'] > 0)
+    num_idle = num_pes - num_active
+
+    # Save benchmark results
+    if args.save_benchmark:
+        benchmark = BenchmarkResult(
+            validation_passed=passed,
+            matrix_rows=args.rows,
+            matrix_cols=args.cols,
+            density=args.density,
+            total_nnz=A.nnz,
+            seed=args.seed,
+            num_pes=num_pes,
+            grid_width=width,
+            grid_height=height,
+            architecture=args.arch,
+            fabric_dims_w=fabric_dims[0],
+            fabric_dims_h=fabric_dims[1],
+            max_memory_per_pe=max_memory,
+            avg_memory_per_pe=avg_memory,
+            memory_limit_per_pe=48000,
+            memory_utilization_pct=memory_utilization,
+            compile_time=compile_time,
+            memcpy_h2d_time=timing_info['memcpy_h2d'],
+            compute_time=timing_info['compute'],
+            memcpy_d2h_time=timing_info['memcpy_d2h'],
+            total_run_time=timing_info['total_run'],
+            total_time=total_time,
+            min_nnz_per_pe=min_nnz_pe,
+            max_nnz_per_pe=max_nnz_pe,
+            avg_nnz_per_pe=avg_nnz_pe,
+            load_imbalance_pct=load_imbalance,
+            num_active_pes=num_active,
+            num_idle_pes=num_idle,
+            total_nnz_padded=total_nnz_padded,
+            max_rows_padded=max_rows_padded
+        )
+
+        try:
+            save_benchmark(benchmark, csv_path=args.save_benchmark)
+        except Exception as e:
+            logger.warning(f"Failed to save benchmark: {e}")
 
     if passed:
         logger.info("🎉 SUCCESS! Multi-PE SpMV works correctly!")
