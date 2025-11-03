@@ -1,90 +1,123 @@
-// pe.csl
-// Kernel code that runs on each PE
+// pe.csl - SIMD optimized with DSDs (TYPE-FIXED)
 
-// Parameters passed from layout
 param memcpy_params: comptime_struct;
 param TOTAL_NNZ: i16;
 param MAX_ROWS: i16;
 
-// Import memcpy module for host communication
 const sys_mod = @import_module("<memcpy/memcpy>", memcpy_params);
 
-// ============================================================================
-// Storage for SpMV data
-// ============================================================================
-
-// Row structure (CSR-style)
-var row_offsets = @zeros([MAX_ROWS + 1]i32);   // Changed to i32
+// Storage
+var row_offsets = @zeros([MAX_ROWS + 1]i32);
 var num_rows = @zeros([1]i32);
+var matrix_values = @zeros([TOTAL_NNZ]f32);
+var vector_values = @zeros([TOTAL_NNZ]f32);
+var results = @zeros([MAX_ROWS]f32);
 
-// Matched pairs data
-var matrix_values = @zeros([TOTAL_NNZ]f32);    // Matrix values
-var vector_values = @zeros([TOTAL_NNZ]f32);    // Pre-gathered vector values
-
-// Results
-var results = @zeros([MAX_ROWS]f32);           // Output: y = A*x
-
-// Pointers for export
+// Pointers
 var ptr_row_offsets: [*]i32 = &row_offsets;
-var ptr_num_rows: [*]i32 = &num_rows;          // Changed to i32
+var ptr_num_rows: [*]i32 = &num_rows;
 var ptr_matrix_values: [*]f32 = &matrix_values;
 var ptr_vector_values: [*]f32 = &vector_values;
 const ptr_results: [*]f32 = &results;
 
-// ============================================================================
-// Compute kernel
-// ============================================================================
+// SIMD chunk size - NOW i32 to match len!
+const CHUNK_SIZE: i32 = 32;
+var chunk_buffer = @zeros([32]f32);  // Array size is literal
 
+// SIMD dot product
+fn dot_product_simd(start: i32, len: i32) f32 {
+    var total_sum: f32 = 0.0;
+    
+    const num_full_chunks = len / CHUNK_SIZE;
+    const remainder = len % CHUNK_SIZE;
+    
+    // Process full chunks with SIMD
+    var chunk: i32 = 0;
+    while (chunk < num_full_chunks) : (chunk += 1) {
+        const offset = start + chunk * CHUNK_SIZE;
+        
+        // Create DSDs for SIMD operations
+        const mat_dsd = @get_dsd(mem1d_dsd, .{
+            .base_address = &matrix_values[offset],
+            .extent = 32  // Use literal, not CHUNK_SIZE
+        });
+        
+        const vec_dsd = @get_dsd(mem1d_dsd, .{
+            .base_address = &vector_values[offset],
+            .extent = 32
+        });
+        
+        const buf_dsd = @get_dsd(mem1d_dsd, .{
+            .base_address = &chunk_buffer,
+            .extent = 32
+        });
+        
+        // SIMD multiply: 8× f32/cycle!
+        @fmuls(buf_dsd, mat_dsd, vec_dsd);
+        
+        // Reduction
+        var chunk_sum: f32 = 0.0;
+        var i: i32 = 0;
+        while (i < 32) : (i += 1) {
+            chunk_sum += chunk_buffer[i];
+        }
+        total_sum += chunk_sum;
+    }
+    
+    // Handle remainder scalar
+    if (remainder > 0) {
+        const rem_start = start + num_full_chunks * CHUNK_SIZE;
+        var i: i32 = 0;
+        while (i < remainder) : (i += 1) {
+            total_sum += matrix_values[rem_start + i] * vector_values[rem_start + i];
+        }
+    }
+    
+    return total_sum;
+}
+
+// Scalar fallback for short rows
+fn dot_product_scalar(start: i32, len: i32) f32 {
+    var sum: f32 = 0.0;
+    var i: i32 = 0;
+    while (i < len) : (i += 1) {
+        sum += matrix_values[start + i] * vector_values[start + i];
+    }
+    return sum;
+}
+
+// Compute task
 const compute_task_id: local_task_id = @get_local_task_id(10);
 
 task compute_spmv() void {
-    // Get actual num_rows value (cast from i32 to i16 for loop)
-    const n_rows = @as(i16, num_rows[0]);
+    const n_rows = num_rows[0];
+    const SIMD_THRESHOLD: i32 = 16;
     
-    // Compute dot product for each row
-    var r: i16 = 0;
+    var r: i32 = 0;
     while (r < n_rows) : (r += 1) {
-        const start = @as(i16, row_offsets[r]);
-        const end = @as(i16, row_offsets[r + 1]);
+        const start = row_offsets[r];
+        const end = row_offsets[r + 1];
         const row_len = end - start;
         
-        var dot_product: f32 = 0.0;
-        
-        // Dot product: sum(matrix_val[i] * vector_val[i])
-        var i: i16 = 0;
-        while (i < row_len) : (i += 1) {
-            const idx = start + i;
-            dot_product += matrix_values[idx] * vector_values[idx];
+        if (row_len == 0) {
+            results[r] = 0.0;
+        } else if (row_len < SIMD_THRESHOLD) {
+            results[r] = dot_product_scalar(start, row_len);
+        } else {
+            results[r] = dot_product_simd(start, row_len);
         }
-        
-        results[r] = dot_product;
     }
     
-    // CRITICAL: Unblock command stream for memcpy
     sys_mod.unblock_cmd_stream();
 }
 
-// ============================================================================
-// Host-callable functions
-// ============================================================================
-
-// Function to trigger SpMV computation
 fn spmv() void {
     @activate(compute_task_id);
 }
 
-// ============================================================================
-// Compile-time setup
-// ============================================================================
-
 comptime {
-    // Bind task to task ID
     @bind_local_task(compute_spmv, compute_task_id);
-    
-    // export function
     @export_symbol(spmv);
-
-    // Export pointers to data
     @export_symbol(ptr_row_offsets, "row_offsets");
     @export_symbol(ptr_num_rows, "num_rows");
     @export_symbol(ptr_matrix_values, "matrix_values");
