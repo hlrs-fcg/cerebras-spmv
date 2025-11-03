@@ -1,7 +1,7 @@
 cerebras-appliance==2.5.0
 cerebras-sdk==2.5.0
 dill==0.4.0
-grpcio==1.47.0
+grpcio==1.53.2
 grpcio-tools==1.47.0
 h5py==3.10.0
 hdf5plugin==5.1.0
