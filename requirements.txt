@@ -17,5 +17,5 @@ setuptools==75.3.2
 six==1.17.0
 tblib==1.7.0
 tqdm==4.67.1
-urllib3==1.26.20
+urllib3==2.5.0
 zstandard==0.23.0
