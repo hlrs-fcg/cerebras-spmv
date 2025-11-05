@@ -56,10 +56,22 @@ class BenchmarkResult:
     # Timing (seconds)
     compile_time: float = 0.0
     memcpy_h2d_time: float = 0.0
-    compute_time: float = 0.0
+    compute_time_python: float = 0.0
+    compute_time_hw_min: float = 0.0
+    compute_time_hw_avg: float = 0.0
+    compute_time_hw_max: float = 0.0
+    compute_time_hw_std: float = 0.0
+    compute_hw_cycles_min: int = 0
+    compute_hw_cycles_avg: int = 0
+    compute_hw_cycles_max: int = 0
+    compute_hw_cycles_std: int = 0
     memcpy_d2h_time: float = 0.0
     total_run_time: float = 0.0
-    total_time: float = 0.0  # Including everything
+    total_time: float = 0.0
+
+    # Performance metrics
+    gflops_hw: float = 0.0
+    gflops_python: float = 0.0
 
     # Load balancing
     min_nnz_per_pe: int = 0
@@ -102,7 +114,8 @@ class BenchmarkResult:
             f"PEs: {self.num_pes} ({self.grid_width}×{self.grid_height}), {self.num_active_pes} active",
             f"Memory: {self.max_memory_per_pe/1024:.2f} KB max ({self.memory_utilization_pct:.1f}%)",
             f"Timing: compile={self.compile_time:.2f}s, H2D={self.memcpy_h2d_time:.3f}s, "
-            f"compute={self.compute_time:.3f}s, D2H={self.memcpy_d2h_time:.3f}s",
+            f"compute_hw={self.compute_time_hw_avg:.6f}s, D2H={self.memcpy_d2h_time:.3f}s",
+            f"Performance: {self.gflops_hw:.2f} GFLOPS",
             f"Total: {self.total_time:.2f}s",
             f"Load balance: imbalance={self.load_imbalance_pct:.1f}%",
             f"Validation: {'PASSED' if self.validation_passed else 'FAILED'}",
@@ -237,7 +250,8 @@ def print_benchmark_summary(csv_path: str = "tests/benchmark_results.csv",
         logger.info(f"\n{i}. {result.timestamp}")
         logger.info(f"   Matrix: {result.matrix_rows}×{result.matrix_cols} (NNZ={result.total_nnz})")
         logger.info(f"   PEs: {result.num_pes} ({result.grid_width}×{result.grid_height})")
-        logger.info(f"   Time: {result.total_time:.2f}s (compute: {result.compute_time:.3f}s)")
+        logger.info(f"   Time: {result.total_time:.2f}s (compute_hw: {result.compute_time_hw_avg:.6f}s)")
+        logger.info(f"   Performance: {result.gflops_hw:.2f} GFLOPS")
         logger.info(f"   Memory: {result.max_memory_per_pe/1024:.2f} KB ({result.memory_utilization_pct:.1f}%)")
         logger.info(f"   Status: {'✓ PASSED' if result.validation_passed else '✗ FAILED'}")
 

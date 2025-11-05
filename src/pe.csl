@@ -5,6 +5,7 @@ param TOTAL_NNZ: i16;
 param MAX_ROWS: i16;
 
 const sys_mod = @import_module("<memcpy/memcpy>", memcpy_params);
+const timestamp = @import_module("<time>");
 
 var row_offsets = @zeros([MAX_ROWS + 1]i32);
 var num_rows = @zeros([1]i32);
@@ -17,6 +18,11 @@ var ptr_num_rows: [*]i32 = &num_rows;
 var ptr_matrix_values: [*]f32 = &matrix_values;
 var ptr_vector_values: [*]f32 = &vector_values;
 const ptr_results: [*]f32 = &results;
+
+var tscStartBuffer = @zeros([timestamp.tsc_size_words]u16);
+var tscEndBuffer = @zeros([timestamp.tsc_size_words]u16);
+var time_buf_u16 = @zeros([6]u16);
+var ptr_time_buf_u16: [*]u16 = &time_buf_u16;
 
 const CHUNK_SIZE: i32 = 32;
 var chunk_buffer = @zeros([32]f32);
@@ -80,15 +86,18 @@ fn dot_product_scalar(start: i32, len: i32) f32 {
 const compute_task_id: local_task_id = @get_local_task_id(10);
 
 task compute_spmv() void {
+    timestamp.enable_tsc();
+    timestamp.get_timestamp(&tscStartBuffer);
+
     const n_rows = num_rows[0];
     const SIMD_THRESHOLD: i32 = 16;
-    
+
     var r: i32 = 0;
     while (r < n_rows) : (r += 1) {
         const start = row_offsets[r];
         const end = row_offsets[r + 1];
         const row_len = end - start;
-        
+
         if (row_len == 0) {
             results[r] = 0.0;
         } else if (row_len < SIMD_THRESHOLD) {
@@ -97,7 +106,17 @@ task compute_spmv() void {
             results[r] = dot_product_simd(start, row_len);
         }
     }
-    
+
+    timestamp.get_timestamp(&tscEndBuffer);
+    timestamp.disable_tsc();
+
+    time_buf_u16[0] = tscStartBuffer[0];
+    time_buf_u16[1] = tscStartBuffer[1];
+    time_buf_u16[2] = tscStartBuffer[2];
+    time_buf_u16[3] = tscEndBuffer[0];
+    time_buf_u16[4] = tscEndBuffer[1];
+    time_buf_u16[5] = tscEndBuffer[2];
+
     sys_mod.unblock_cmd_stream();
 }
 
@@ -113,4 +132,5 @@ comptime {
     @export_symbol(ptr_matrix_values, "matrix_values");
     @export_symbol(ptr_vector_values, "vector_values");
     @export_symbol(ptr_results, "results");
+    @export_symbol(ptr_time_buf_u16, "time_buf_u16");
 }

@@ -198,8 +198,7 @@ Examples:
 
     total_time = time.time() - total_start
 
-    # Print timing summary
-    print_timing_summary(compile_time, timing_info, total_time)
+    print_timing_summary(compile_time, timing_info, total_time, A.nnz)
 
     # Calculate load balancing statistics
     nnz_counts = [pe['total_nnz'] for pe in pe_data_temp if pe['total_nnz'] > 0]
@@ -218,6 +217,11 @@ Examples:
     # Count active vs idle PEs
     num_active = sum(1 for pe in pe_data_temp if pe['num_rows'] > 0)
     num_idle = num_pes - num_active
+
+    # Calculate performance metrics
+    flops = 2 * A.nnz
+    gflops_hw = (flops / timing_info['compute_hw_avg']) / 1e9 if timing_info['compute_hw_avg'] > 0 else 0
+    gflops_python = (flops / timing_info['compute_python']) / 1e9 if timing_info['compute_python'] > 0 else 0
 
     # Save benchmark results
     if args.save_benchmark:
@@ -240,10 +244,20 @@ Examples:
             memory_utilization_pct=memory_utilization,
             compile_time=compile_time,
             memcpy_h2d_time=timing_info['memcpy_h2d'],
-            compute_time=timing_info['compute'],
+            compute_time_python=timing_info['compute_python'],
+            compute_time_hw_min=timing_info['compute_hw_min'],
+            compute_time_hw_avg=timing_info['compute_hw_avg'],
+            compute_time_hw_max=timing_info['compute_hw_max'],
+            compute_time_hw_std=timing_info['compute_hw_std'],
+            compute_hw_cycles_min=timing_info['compute_hw_cycles_min'],
+            compute_hw_cycles_avg=timing_info['compute_hw_cycles_avg'],
+            compute_hw_cycles_max=timing_info['compute_hw_cycles_max'],
+            compute_hw_cycles_std=timing_info['compute_hw_cycles_std'],
             memcpy_d2h_time=timing_info['memcpy_d2h'],
             total_run_time=timing_info['total_run'],
             total_time=total_time,
+            gflops_hw=gflops_hw,
+            gflops_python=gflops_python,
             min_nnz_per_pe=min_nnz_pe,
             max_nnz_per_pe=max_nnz_pe,
             avg_nnz_per_pe=avg_nnz_pe,

@@ -7,6 +7,7 @@ import numpy as np
 import scipy.sparse as sp
 
 from cerebras.sdk.client import SdkRuntime
+from cerebras.sdk.sdk_utils import calculate_cycles
 from cerebras.appliance.pb.sdk.sdk_common_pb2 import MemcpyDataType, MemcpyOrder
 
 from spmv_prototype import MatchedPairsSpMV
@@ -37,6 +38,7 @@ def run_spmv_on_device(
         sym_matrix_values = runner.get_id("matrix_values")
         sym_vector_values = runner.get_id("vector_values")
         sym_results = runner.get_id("results")
+        sym_time_buf = runner.get_id("time_buf_u16")
 
         memcpy_h2d_start = time.time()
 
@@ -109,8 +111,73 @@ def run_spmv_on_device(
 
         compute_start = time.time()
         runner.launch("spmv", nonblock=False)
-        compute_time = time.time() - compute_start
-        logger.info(f"Computation: {compute_time:.3f}s")
+        compute_time_python = time.time() - compute_start
+        logger.info(f"Computation (Python): {compute_time_python:.3f}s")
+
+        logger.info("Retrieving hardware timestamps from PEs...")
+        all_pe_cycles = []
+        all_pe_ids = []
+
+        for pe in pe_data:
+            if pe['num_rows'] == 0:
+                continue
+
+            pe_id = pe['pe_id']
+            x = pe_id % width
+            y = pe_id // width
+
+            ts_raw = np.zeros(6, dtype=np.uint16)
+            runner.memcpy_d2h(
+                ts_raw,
+                sym_time_buf,
+                x, y, 1, 1,
+                6,
+                streaming=False,
+                data_type=MemcpyDataType.MEMCPY_16BIT,
+                order=MemcpyOrder.ROW_MAJOR,
+                nonblock=False
+            )
+
+            start_buf = ts_raw[0:3]
+            end_buf = ts_raw[3:6]
+
+            start_cycles = calculate_cycles(start_buf)
+            end_cycles = calculate_cycles(end_buf)
+            elapsed_cycles = end_cycles - start_cycles
+
+            all_pe_cycles.append(elapsed_cycles)
+            all_pe_ids.append(pe_id)
+
+        all_pe_cycles = np.array(all_pe_cycles)
+        min_cycles = np.min(all_pe_cycles)
+        max_cycles = np.max(all_pe_cycles)
+        avg_cycles = np.mean(all_pe_cycles)
+        std_cycles = np.std(all_pe_cycles)
+
+        CLOCK_FREQ_GHZ = 0.85
+
+        min_time_us = (min_cycles / CLOCK_FREQ_GHZ) * 1e-3
+        max_time_us = (max_cycles / CLOCK_FREQ_GHZ) * 1e-3
+        avg_time_us = (avg_cycles / CLOCK_FREQ_GHZ) * 1e-3
+        std_time_us = (std_cycles / CLOCK_FREQ_GHZ) * 1e-3
+
+        min_time_s = min_time_us / 1e6
+        max_time_s = max_time_us / 1e6
+        avg_time_s = avg_time_us / 1e6
+        std_time_s = std_time_us / 1e6
+
+        logger.info("="*60)
+        logger.info("Hardware Timing (Timestamp Counter)")
+        logger.info("="*60)
+        logger.info(f"Active PEs measured: {len(all_pe_cycles)}")
+        logger.info(f"Min PE:  {min_time_us:>10.3f} µs ({min_cycles:>10,} cycles)")
+        logger.info(f"Avg PE:  {avg_time_us:>10.3f} µs ({avg_cycles:>10,.0f} cycles)")
+        logger.info(f"Max PE:  {max_time_us:>10.3f} µs ({max_cycles:>10,} cycles)")
+        logger.info(f"Std Dev: {std_time_us:>10.3f} µs ({std_cycles:>10,.0f} cycles)")
+        logger.info(f"-"*60)
+        logger.info(f"Python time (with overhead): {compute_time_python:.6f} s")
+        logger.info(f"Overhead factor: {compute_time_python / avg_time_s:.1f}×")
+        logger.info("="*60 + "\n")
 
         memcpy_d2h_start = time.time()
 
@@ -145,9 +212,17 @@ def run_spmv_on_device(
     run_time = time.time() - run_start
 
     timing_info = {
-        'total_run': run_time,
+        'total_run': memcpy_h2d_time + avg_time_s + memcpy_d2h_time,
         'memcpy_h2d': memcpy_h2d_time,
-        'compute': compute_time,
+        'compute_python': compute_time_python,
+        'compute_hw_min': min_time_s,
+        'compute_hw_avg': avg_time_s,
+        'compute_hw_max': max_time_s,
+        'compute_hw_std': std_time_s,
+        'compute_hw_cycles_min': int(min_cycles),
+        'compute_hw_cycles_avg': int(avg_cycles),
+        'compute_hw_cycles_max': int(max_cycles),
+        'compute_hw_cycles_std': int(std_cycles),
         'memcpy_d2h': memcpy_d2h_time
     }
 
