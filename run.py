@@ -189,20 +189,11 @@ Examples:
     )
 
     if args.compile_only:
-        logger.info("Compilation complete. Exiting (--compile-only specified).")
-        total_time = time.time() - total_start
-        logger.info(f"\nTotal time: {total_time:.2f} seconds")
         return 0
 
-    # Run on device
-    logger.info("Running SpMV on device...\n")
     y_computed, timing_info = run_spmv_on_device(A, x, artifact_id, num_pes, width, height)
 
-    # Compute reference
-    logger.info("Computing reference solution...")
     y_reference = A.dot(x).astype(np.float32)
-
-    # Validate
     passed = validate_results(y_computed, y_reference, tolerance=1e-4)
 
     total_time = time.time() - total_start
@@ -268,12 +259,11 @@ Examples:
         except Exception as e:
             logger.warning(f"Failed to save benchmark: {e}")
 
-    if passed:
-        logger.info("🎉 SUCCESS! Multi-PE SpMV works correctly!")
-        return 0
-    else:
-        logger.error("❌ FAILED! Results do not match.")
+    if not passed:
+        logger.error("❌ Validation failed: results do not match reference")
         return 1
+
+    return 0
 
 
 if __name__ == "__main__":

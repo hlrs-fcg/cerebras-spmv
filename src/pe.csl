@@ -6,40 +6,35 @@ param MAX_ROWS: i16;
 
 const sys_mod = @import_module("<memcpy/memcpy>", memcpy_params);
 
-// Storage
 var row_offsets = @zeros([MAX_ROWS + 1]i32);
 var num_rows = @zeros([1]i32);
 var matrix_values = @zeros([TOTAL_NNZ]f32);
 var vector_values = @zeros([TOTAL_NNZ]f32);
 var results = @zeros([MAX_ROWS]f32);
 
-// Pointers
 var ptr_row_offsets: [*]i32 = &row_offsets;
 var ptr_num_rows: [*]i32 = &num_rows;
 var ptr_matrix_values: [*]f32 = &matrix_values;
 var ptr_vector_values: [*]f32 = &vector_values;
 const ptr_results: [*]f32 = &results;
 
-// SIMD chunk size - NOW i32 to match len!
 const CHUNK_SIZE: i32 = 32;
-var chunk_buffer = @zeros([32]f32);  // Array size is literal
+var chunk_buffer = @zeros([32]f32);
 
-// SIMD dot product
+// SIMD dot product: 8× f32/cycle with @fmuls
 fn dot_product_simd(start: i32, len: i32) f32 {
     var total_sum: f32 = 0.0;
     
     const num_full_chunks = len / CHUNK_SIZE;
     const remainder = len % CHUNK_SIZE;
-    
-    // Process full chunks with SIMD
+
     var chunk: i32 = 0;
     while (chunk < num_full_chunks) : (chunk += 1) {
         const offset = start + chunk * CHUNK_SIZE;
-        
-        // Create DSDs for SIMD operations
+
         const mat_dsd = @get_dsd(mem1d_dsd, .{
             .base_address = &matrix_values[offset],
-            .extent = 32  // Use literal, not CHUNK_SIZE
+            .extent = 32
         });
         
         const vec_dsd = @get_dsd(mem1d_dsd, .{
@@ -51,11 +46,9 @@ fn dot_product_simd(start: i32, len: i32) f32 {
             .base_address = &chunk_buffer,
             .extent = 32
         });
-        
-        // SIMD multiply: 8× f32/cycle!
+
         @fmuls(buf_dsd, mat_dsd, vec_dsd);
-        
-        // Reduction
+
         var chunk_sum: f32 = 0.0;
         var i: i32 = 0;
         while (i < 32) : (i += 1) {
@@ -63,8 +56,7 @@ fn dot_product_simd(start: i32, len: i32) f32 {
         }
         total_sum += chunk_sum;
     }
-    
-    // Handle remainder scalar
+
     if (remainder > 0) {
         const rem_start = start + num_full_chunks * CHUNK_SIZE;
         var i: i32 = 0;
@@ -76,7 +68,6 @@ fn dot_product_simd(start: i32, len: i32) f32 {
     return total_sum;
 }
 
-// Scalar fallback for short rows
 fn dot_product_scalar(start: i32, len: i32) f32 {
     var sum: f32 = 0.0;
     var i: i32 = 0;
@@ -86,7 +77,6 @@ fn dot_product_scalar(start: i32, len: i32) f32 {
     return sum;
 }
 
-// Compute task
 const compute_task_id: local_task_id = @get_local_task_id(10);
 
 task compute_spmv() void {

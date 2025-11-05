@@ -1,8 +1,4 @@
-"""
-CSL Compilation Module
-
-Handles compilation of CSL code using the Cerebras SDK compiler.
-"""
+"""CSL compilation using Cerebras SDK compiler."""
 
 import json
 import logging
@@ -25,21 +21,11 @@ def compile_csl(
     artifact_path: str = "artifact.json",
     out_path: str = "out"
 ):
-    """Compile the CSL code using SdkCompiler."""
-    logger.info("Compiling CSL...")
-    logger.debug(f"  PE grid: {width}×{height}")
-    logger.debug(f"  TOTAL_NNZ per PE: {total_nnz_per_pe}")
-    logger.debug(f"  MAX_ROWS per PE: {max_rows_per_pe}")
-    logger.debug(f"  Architecture: {arch}")
-    logger.debug(f"  Fabric dims: {fabric_dims}")
+    logger.info(f"Compiling CSL for {width}×{height} PE grid...")
 
-    # Ensure out_path exists and is absolute
     out_path = str(Path(out_path).resolve())
     Path(out_path).mkdir(parents=True, exist_ok=True)
 
-    logger.debug(f"  Output path: {out_path}")
-
-    # Build compilation arguments
     ARGS = (
         f"--arch={arch} "
         f"--fabric-dims={fabric_dims[0]},{fabric_dims[1]} "
@@ -49,9 +35,6 @@ def compile_csl(
         f"TOTAL_NNZ:{total_nnz_per_pe},MAX_ROWS:{max_rows_per_pe}"
     )
 
-    logger.debug(f"  Compilation args: {ARGS}")
-
-    # Compile using SdkCompiler
     compile_start = time.time()
 
     with SdkCompiler(resource_cpu=24000, resource_mem=64<<30, disable_version_check=True) as compiler:
@@ -68,7 +51,6 @@ def compile_csl(
         logger.error("Compilation failed! No artifact was generated!")
         raise RuntimeError("CSL compilation failed")
 
-    # Save artifact metadata
     artifact_data = {
         "artifact_id": artifact_id,
         "fabric_dims": list(fabric_dims),
@@ -84,9 +66,5 @@ def compile_csl(
     artifact_file = Path(artifact_path)
     with open(artifact_file, "w", encoding="utf8") as f:
         json.dump(artifact_data, f, indent=2)
-
-    logger.info(f"✅ Compilation successful ({compile_time:.2f}s)")
-    logger.debug(f"  Artifact ID: {artifact_id}")
-    logger.debug(f"  Artifact saved to: {artifact_file.resolve()}")
 
     return out_path, artifact_id, compile_time
