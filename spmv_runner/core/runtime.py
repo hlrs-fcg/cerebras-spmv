@@ -7,7 +7,7 @@ import numpy as np
 import scipy.sparse as sp
 
 from cerebras.sdk.client import SdkRuntime
-from cerebras.sdk.sdk_utils import calculate_cycles
+from cerebras.sdk.client.sdk_utils import calculate_cycles
 from cerebras.appliance.pb.sdk.sdk_common_pb2 import MemcpyDataType, MemcpyOrder
 
 from spmv_prototype import MatchedPairsSpMV
@@ -126,17 +126,25 @@ def run_spmv_on_device(
             x = pe_id % width
             y = pe_id // width
 
-            ts_raw = np.zeros(6, dtype=np.uint16)
+            ts_raw_u32 = np.zeros(3, dtype=np.uint32)
+
             runner.memcpy_d2h(
-                ts_raw,
+                ts_raw_u32,
                 sym_time_buf,
                 x, y, 1, 1,
-                6,
+                3,
                 streaming=False,
-                data_type=MemcpyDataType.MEMCPY_16BIT,
+                data_type=MemcpyDataType.MEMCPY_32BIT,
                 order=MemcpyOrder.ROW_MAJOR,
                 nonblock=False
             )
+
+            # Unpack: each u32 contains two u16 values (little-endian)
+            ts_raw = np.zeros(6, dtype=np.uint16)
+            for i in range(3):
+                ts_raw[2*i] = ts_raw_u32[i] & 0xFFFF          # Lower 16 bits
+                ts_raw[2*i + 1] = (ts_raw_u32[i] >> 16) & 0xFFFF  # Upper 16 bits
+
 
             start_buf = ts_raw[0:3]
             end_buf = ts_raw[3:6]

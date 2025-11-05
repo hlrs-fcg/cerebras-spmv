@@ -22,7 +22,7 @@ const ptr_results: [*]f32 = &results;
 var tscStartBuffer = @zeros([timestamp.tsc_size_words]u16);
 var tscEndBuffer = @zeros([timestamp.tsc_size_words]u16);
 var time_buf_u16 = @zeros([6]u16);
-var ptr_time_buf_u16: [*]u16 = &time_buf_u16;
+const ptr_time_buf_u16: [*]u16 = &time_buf_u16;
 
 const CHUNK_SIZE: i32 = 32;
 var chunk_buffer = @zeros([32]f32);

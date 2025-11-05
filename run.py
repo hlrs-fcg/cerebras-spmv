@@ -9,13 +9,10 @@ import numpy as np
 import logging
 import time
 
-# Import our prototype code
 from spmv_prototype import generate_random_sparse_matrix, MatchedPairsSpMV, validate_results
 
-# Import benchmarking
 from tests.benchmark import BenchmarkResult, save_benchmark
 
-# Import modularized components
 from spmv_runner.core import (
     calculate_pe_grid,
     print_grid_info,
@@ -33,7 +30,6 @@ from spmv_runner.utils import (
     print_timing_summary
 )
 
-# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(levelname)s: %(message)s'
