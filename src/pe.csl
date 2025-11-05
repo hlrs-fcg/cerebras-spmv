@@ -115,7 +115,7 @@ task compute_spmv() void {
 
     // Pack timestamps into f32 array (SDK format for calculate_cycles)
     // Each f32 contains 2 u16 values in its bit pattern
-    const tsc_buf_u16 = @zeros([6]u16);
+    var tsc_buf_u16 = @zeros([6]u16);
     tsc_buf_u16[0] = tscStartBuffer[0];
     tsc_buf_u16[1] = tscStartBuffer[1];
     tsc_buf_u16[2] = tscStartBuffer[2];
@@ -124,7 +124,7 @@ task compute_spmv() void {
     tsc_buf_u16[5] = tscEndBuffer[2];
 
     // Reinterpret pairs of u16 as u32, then as f32
-    const tsc_buf_u32 = @zeros([3]u32);
+    var tsc_buf_u32 = @zeros([3]u32);
     tsc_buf_u32[0] = (@as(u32, tsc_buf_u16[1]) << 16) | @as(u32, tsc_buf_u16[0]);
     tsc_buf_u32[1] = (@as(u32, tsc_buf_u16[3]) << 16) | @as(u32, tsc_buf_u16[2]);
     tsc_buf_u32[2] = (@as(u32, tsc_buf_u16[5]) << 16) | @as(u32, tsc_buf_u16[4]);
