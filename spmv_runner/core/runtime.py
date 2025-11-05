@@ -126,7 +126,8 @@ def run_spmv_on_device(
             x = pe_id % width
             y = pe_id // width
 
-            # Retrieve as 32-bit (3 words: each u32 contains 2×u16)
+            # CSL buffer: [start[0], start[1], start[2], end[0], end[1], end[2]]
+            # Retrieve as 32-bit, then reinterpret as u16
             ts_raw_u32 = np.zeros(3, dtype=np.uint32)
             runner.memcpy_d2h(
                 ts_raw_u32,
@@ -139,18 +140,21 @@ def run_spmv_on_device(
                 nonblock=False
             )
 
-            # Unpack: each u32 contains two u16 values (little-endian)
-            ts_raw = np.zeros(6, dtype=np.uint16)
-            for i in range(3):
-                ts_raw[2*i] = ts_raw_u32[i] & 0xFFFF          # Lower 16 bits
-                ts_raw[2*i + 1] = (ts_raw_u32[i] >> 16) & 0xFFFF  # Upper 16 bits
+            # Reinterpret as u16 array (little-endian unpacking)
+            ts_raw = ts_raw_u32.view(np.uint16)
 
+            # Extract start and end timestamps (each is 3×u16)
             start_buf = ts_raw[0:3]
             end_buf = ts_raw[3:6]
 
             start_cycles = calculate_cycles(start_buf)
             end_cycles = calculate_cycles(end_buf)
             elapsed_cycles = end_cycles - start_cycles
+
+            # Debug: print first few PEs
+            if len(all_pe_ids) < 3:
+                logger.info(f"DEBUG PE {pe_id}: start_buf={start_buf}, end_buf={end_buf}")
+                logger.info(f"DEBUG PE {pe_id}: start_cycles={start_cycles}, end_cycles={end_cycles}, elapsed={elapsed_cycles}")
 
             all_pe_cycles.append(elapsed_cycles)
             all_pe_ids.append(pe_id)
