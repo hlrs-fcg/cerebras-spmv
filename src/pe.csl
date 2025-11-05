@@ -87,10 +87,11 @@ const compute_task_id: local_task_id = @get_local_task_id(10);
 
 task compute_spmv() void {
     timestamp.enable_tsc();
-    timestamp.get_timestamp(&tscStartBuffer);
 
     const n_rows = num_rows[0];
     const SIMD_THRESHOLD: i32 = 16;
+
+    timestamp.get_timestamp(&tscStartBuffer);
 
     var r: i32 = 0;
     while (r < n_rows) : (r += 1) {
