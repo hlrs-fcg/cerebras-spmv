@@ -1,8 +1,4 @@
-"""
-Timing Utilities
-
-Provides timing and performance reporting functionality.
-"""
+"""Timing and performance reporting."""
 
 import logging
 
@@ -10,7 +6,6 @@ logger = logging.getLogger(__name__)
 
 
 def print_timing_summary(compile_time: float, timing_info: dict, total_time: float):
-    """Print timing summary at the end."""
     logger.info("\nTiming Summary:")
     logger.info(f"  Compilation:    {compile_time:>8.3f}s")
     logger.info(f"  H2D transfer:   {timing_info['memcpy_h2d']:>8.3f}s")

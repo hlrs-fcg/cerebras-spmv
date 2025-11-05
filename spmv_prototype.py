@@ -252,61 +252,33 @@ def generate_random_sparse_matrix(rows: int, cols: int, density: float, seed: in
 
 
 def validate_results(y_computed: np.ndarray, y_reference: np.ndarray, tolerance: float = 1e-4) -> bool:
-    """
-    Validate results with appropriate floating-point tolerances.
-    
-    Returns True if validation passes.
-    """
+    """Validate results with appropriate floating-point tolerances."""
     diff = np.abs(y_computed - y_reference)
     max_diff = np.max(diff)
-    mean_diff = np.mean(diff)
-    
-    # Compute relative errors for non-zero entries
+
     nonzero_mask = np.abs(y_reference) > 1e-10
     if np.any(nonzero_mask):
         rel_diff = diff[nonzero_mask] / np.abs(y_reference[nonzero_mask])
         max_rel_diff = np.max(rel_diff)
-        mean_rel_diff = np.mean(rel_diff)
     else:
         max_rel_diff = 0.0
-        mean_rel_diff = 0.0
-    
-    logging.info("\n" + "="*60)
-    logging.info("Validation")
-    logging.info("="*60)
-    logging.info(f"Absolute errors:")
-    logging.info(f"  Max:  {max_diff:.2e}")
-    logging.info(f"  Mean: {mean_diff:.2e}")
-    
+
+    if max_diff < tolerance or (np.any(nonzero_mask) and max_rel_diff < tolerance):
+        return True
+
+    logging.error(f"❌ Validation failed: errors exceed tolerance {tolerance}")
+    logging.error(f"  Max absolute error: {max_diff:.2e}")
     if np.any(nonzero_mask):
-        logging.info(f"Relative errors:")
-        logging.info(f"  Max:  {max_rel_diff:.2e}")
-        logging.info(f"  Mean: {mean_rel_diff:.2e}")
-    
-    # Check both absolute and relative tolerances
-    passed = False
-    if max_diff < tolerance:
-        logging.info(f"✅ PASSED: Absolute error < {tolerance}")
-        passed = True
-    elif np.any(nonzero_mask) and max_rel_diff < tolerance:
-        logging.info(f"✅ PASSED: Relative error < {tolerance}")
-        passed = True
-    else:
-        logging.error(f"❌ FAILED: Errors exceed tolerance {tolerance}")
-        logging.error(f"  Worst absolute: {max_diff:.2e}")
-        if np.any(nonzero_mask):
-            logging.error(f"  Worst relative: {max_rel_diff:.2e}")
-        
-        # Show worst offenders
-        worst_idx = np.argsort(diff)[-5:][::-1]
-        logging.error(f"  Worst mismatches:")
-        for idx in worst_idx:
-            logging.error(f"    Row {idx}: computed={y_computed[idx]:.6f}, "
-                         f"reference={y_reference[idx]:.6f}, "
-                         f"diff={diff[idx]:.2e}")
-    
-    logging.info("="*60 + "\n")
-    return passed
+        logging.error(f"  Max relative error: {max_rel_diff:.2e}")
+
+    worst_idx = np.argsort(diff)[-5:][::-1]
+    logging.error(f"  Worst mismatches:")
+    for idx in worst_idx:
+        logging.error(f"    Row {idx}: computed={y_computed[idx]:.6f}, "
+                     f"reference={y_reference[idx]:.6f}, "
+                     f"diff={diff[idx]:.2e}")
+
+    return False
 
 
 def main():
@@ -337,35 +309,19 @@ def main():
     
     logging.info(f"Matrix: {A.shape}, NNZ: {A.nnz}")
     logging.debug(f"Vector x: {x}")
-    
-    # Initialize SpMV
+
     spmv = MatchedPairsSpMV(A, args.num_pes)
-    
-    # Distribute rows
-    logging.info(f"\nDistributing {args.rows} rows over {args.num_pes} PEs...")
     pe_data = spmv.distribute_by_nnz()
-    
-    # Prepare matched pairs
-    logging.info("Preparing matched pairs...")
     spmv.prepare_matched_pairs(pe_data, x)
-    
-    # Print distribution stats
     spmv.print_distribution_stats(pe_data)
-    
-    # Compute on each PE
-    logging.info("Computing SpMV on each PE...")
+
     pe_results = []
     for pe in pe_data:
         results = spmv.compute_on_pe(pe)
         pe_results.append(results)
-    
-    # Gather results
+
     y_computed = spmv.gather_results(pe_data, pe_results)
-    
-    # Reference computation
     y_reference = A.dot(x).astype(np.float32)
-    
-    # Validate with appropriate tolerance
     passed = validate_results(y_computed, y_reference, tolerance=args.tolerance)
     
     if not passed:
