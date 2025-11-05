@@ -111,7 +111,15 @@ task compute_spmv() void {
     timestamp.get_timestamp(&tscEndBuffer);
     timestamp.disable_tsc();
 
-    // Pack timestamps (Cerebras official pattern)
+    // DEBUG: First write a known pattern to verify buffer works
+    time_buf_u16[0] = 0xAAAA;
+    time_buf_u16[1] = 0xBBBB;
+    time_buf_u16[2] = 0xCCCC;
+    time_buf_u16[3] = 0xDDDD;
+    time_buf_u16[4] = 0xEEEE;
+    time_buf_u16[5] = 0xFFFF;
+
+    // Then overwrite with actual timestamps
     time_buf_u16[0] = tscStartBuffer[0];
     time_buf_u16[1] = tscStartBuffer[1];
     time_buf_u16[2] = tscStartBuffer[2];

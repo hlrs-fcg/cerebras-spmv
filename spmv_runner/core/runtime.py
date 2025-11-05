@@ -127,18 +127,21 @@ def run_spmv_on_device(
             y = pe_id // width
 
             # CSL buffer: [start[0], start[1], start[2], end[0], end[1], end[2]]
-            # Cerebras official pattern: use MEMCPY_16BIT directly
-            ts_raw = np.zeros(6, dtype=np.uint16)
+            # Must use MEMCPY_32BIT (SDK requirement), retrieve as 3×u32
+            ts_raw_u32 = np.zeros(3, dtype=np.uint32)
             runner.memcpy_d2h(
-                ts_raw,
+                ts_raw_u32,
                 sym_time_buf,
                 x, y, 1, 1,
-                6,
+                3,
                 streaming=False,
-                data_type=MemcpyDataType.MEMCPY_16BIT,
+                data_type=MemcpyDataType.MEMCPY_32BIT,
                 order=MemcpyOrder.ROW_MAJOR,
                 nonblock=False
             )
+
+            # Reinterpret as 6×u16
+            ts_raw = ts_raw_u32.view(np.uint16)
 
             # Extract start and end timestamps (each is 3×u16)
             start_buf = ts_raw[0:3]
