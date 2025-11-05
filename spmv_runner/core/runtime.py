@@ -126,8 +126,8 @@ def run_spmv_on_device(
             x = pe_id % width
             y = pe_id // width
 
+            # Retrieve as 32-bit (3 words: each u32 contains 2×u16)
             ts_raw_u32 = np.zeros(3, dtype=np.uint32)
-
             runner.memcpy_d2h(
                 ts_raw_u32,
                 sym_time_buf,
@@ -144,7 +144,6 @@ def run_spmv_on_device(
             for i in range(3):
                 ts_raw[2*i] = ts_raw_u32[i] & 0xFFFF          # Lower 16 bits
                 ts_raw[2*i + 1] = (ts_raw_u32[i] >> 16) & 0xFFFF  # Upper 16 bits
-
 
             start_buf = ts_raw[0:3]
             end_buf = ts_raw[3:6]
