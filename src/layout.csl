@@ -28,6 +28,6 @@ layout {
     @export_name("matrix_values", [*]f32, true);
     @export_name("vector_values", [*]f32, true);
     @export_name("results", [*]f32, false);
-    @export_name("time_buf_u16", [*]u16, false);
+    @export_name("time_buf_f32", [*]f32, false);
     @export_name("spmv", fn()void);
 }

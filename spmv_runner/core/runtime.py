@@ -38,7 +38,7 @@ def run_spmv_on_device(
         sym_matrix_values = runner.get_id("matrix_values")
         sym_vector_values = runner.get_id("vector_values")
         sym_results = runner.get_id("results")
-        sym_time_buf = runner.get_id("time_buf_u16")
+        sym_time_buf = runner.get_id("time_buf_f32")
 
         memcpy_h2d_start = time.time()
 
@@ -126,11 +126,10 @@ def run_spmv_on_device(
             x = pe_id % width
             y = pe_id // width
 
-            # CSL buffer: [start[0], start[1], start[2], end[0], end[1], end[2]]
-            # Must use MEMCPY_32BIT (SDK requirement), retrieve as 3×u32
-            ts_raw_u32 = np.zeros(3, dtype=np.uint32)
+            # Retrieve timestamp buffer as 3×f32 (SDK format for calculate_cycles)
+            ts_buf_f32 = np.zeros(3, dtype=np.float32)
             runner.memcpy_d2h(
-                ts_raw_u32,
+                ts_buf_f32,
                 sym_time_buf,
                 x, y, 1, 1,
                 3,
@@ -140,22 +139,13 @@ def run_spmv_on_device(
                 nonblock=False
             )
 
-            # Reinterpret as 6×u16
-            ts_raw = ts_raw_u32.view(np.uint16)
+            # calculate_cycles unpacks all 6 u16 from 3 f32 and calculates elapsed automatically
+            elapsed_cycles = calculate_cycles(ts_buf_f32)
 
-            # Extract start and end timestamps (each is 3×u16)
-            start_buf = ts_raw[0:3]
-            end_buf = ts_raw[3:6]
-
-            start_cycles = calculate_cycles(start_buf)
-            end_cycles = calculate_cycles(end_buf)
-            elapsed_cycles = end_cycles - start_cycles
-
-            # Debug: print interpreted values
+            # Debug
             if len(all_pe_ids) < 3:
-                logger.info(f"DEBUG PE {pe_id}: ts_raw (all 6 u16)={ts_raw}")
-                logger.info(f"DEBUG PE {pe_id}: start_buf={start_buf}, end_buf={end_buf}")
-                logger.info(f"DEBUG PE {pe_id}: start_cycles={start_cycles}, end_cycles={end_cycles}, elapsed={elapsed_cycles}")
+                logger.info(f"DEBUG PE {pe_id}: ts_buf_f32={ts_buf_f32}")
+                logger.info(f"DEBUG PE {pe_id}: elapsed_cycles={elapsed_cycles}")
 
             all_pe_cycles.append(elapsed_cycles)
             all_pe_ids.append(pe_id)

@@ -21,8 +21,10 @@ const ptr_results: [*]f32 = &results;
 
 var tscStartBuffer = @zeros([timestamp.tsc_size_words]u16);
 var tscEndBuffer = @zeros([timestamp.tsc_size_words]u16);
-var time_buf_u16 = @zeros([6]u16);
-const ptr_time_buf_u16: [*]u16 = &time_buf_u16;
+// Export as f32 (SDK requirement for calculate_cycles)
+// Each pair of u16 values encoded in f32 bit pattern
+var time_buf_f32 = @zeros([3]f32);
+const ptr_time_buf_f32: [*]f32 = &time_buf_f32;
 
 const CHUNK_SIZE: i32 = 32;
 var chunk_buffer = @zeros([32]f32);
@@ -111,21 +113,26 @@ task compute_spmv() void {
     timestamp.get_timestamp(&tscEndBuffer);
     timestamp.disable_tsc();
 
-    // DEBUG: First write a known pattern to verify buffer works
-    time_buf_u16[0] = 0xAAAA;
-    time_buf_u16[1] = 0xBBBB;
-    time_buf_u16[2] = 0xCCCC;
-    time_buf_u16[3] = 0xDDDD;
-    time_buf_u16[4] = 0xEEEE;
-    time_buf_u16[5] = 0xFFFF;
+    // Pack timestamps into f32 array (SDK format for calculate_cycles)
+    // Each f32 contains 2 u16 values in its bit pattern
+    const tsc_buf_u16 = @zeros([6]u16);
+    tsc_buf_u16[0] = tscStartBuffer[0];
+    tsc_buf_u16[1] = tscStartBuffer[1];
+    tsc_buf_u16[2] = tscStartBuffer[2];
+    tsc_buf_u16[3] = tscEndBuffer[0];
+    tsc_buf_u16[4] = tscEndBuffer[1];
+    tsc_buf_u16[5] = tscEndBuffer[2];
 
-    // Then overwrite with actual timestamps
-    time_buf_u16[0] = tscStartBuffer[0];
-    time_buf_u16[1] = tscStartBuffer[1];
-    time_buf_u16[2] = tscStartBuffer[2];
-    time_buf_u16[3] = tscEndBuffer[0];
-    time_buf_u16[4] = tscEndBuffer[1];
-    time_buf_u16[5] = tscEndBuffer[2];
+    // Reinterpret pairs of u16 as u32, then as f32
+    const tsc_buf_u32 = @zeros([3]u32);
+    tsc_buf_u32[0] = (@as(u32, tsc_buf_u16[1]) << 16) | @as(u32, tsc_buf_u16[0]);
+    tsc_buf_u32[1] = (@as(u32, tsc_buf_u16[3]) << 16) | @as(u32, tsc_buf_u16[2]);
+    tsc_buf_u32[2] = (@as(u32, tsc_buf_u16[5]) << 16) | @as(u32, tsc_buf_u16[4]);
+
+    // Bitcast u32 to f32
+    time_buf_f32[0] = @bitcast(f32, tsc_buf_u32[0]);
+    time_buf_f32[1] = @bitcast(f32, tsc_buf_u32[1]);
+    time_buf_f32[2] = @bitcast(f32, tsc_buf_u32[2]);
 
     sys_mod.unblock_cmd_stream();
 }
@@ -142,5 +149,5 @@ comptime {
     @export_symbol(ptr_matrix_values, "matrix_values");
     @export_symbol(ptr_vector_values, "vector_values");
     @export_symbol(ptr_results, "results");
-    @export_symbol(ptr_time_buf_u16, "time_buf_u16");
+    @export_symbol(ptr_time_buf_f32, "time_buf_f32");
 }
