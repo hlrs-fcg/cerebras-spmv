@@ -21,8 +21,7 @@ const ptr_results: [*]f32 = &results;
 
 var tscStartBuffer = @zeros([timestamp.tsc_size_words]u16);
 var tscEndBuffer = @zeros([timestamp.tsc_size_words]u16);
-// Buffer size: 2 * tsc_size_words to hold both start and end timestamps
-var time_buf_u16 = @zeros([2 * timestamp.tsc_size_words]u16);
+var time_buf_u16 = @zeros([6]u16);
 const ptr_time_buf_u16: [*]u16 = &time_buf_u16;
 
 const CHUNK_SIZE: i32 = 32;
@@ -112,12 +111,13 @@ task compute_spmv() void {
     timestamp.get_timestamp(&tscEndBuffer);
     timestamp.disable_tsc();
 
-    // Copy all timestamp words (tsc_size_words should be 3)
-    var i: i16 = 0;
-    while (i < timestamp.tsc_size_words) : (i += 1) {
-        time_buf_u16[i] = tscStartBuffer[i];
-        time_buf_u16[timestamp.tsc_size_words + i] = tscEndBuffer[i];
-    }
+    // Pack timestamps (Cerebras official pattern)
+    time_buf_u16[0] = tscStartBuffer[0];
+    time_buf_u16[1] = tscStartBuffer[1];
+    time_buf_u16[2] = tscStartBuffer[2];
+    time_buf_u16[3] = tscEndBuffer[0];
+    time_buf_u16[4] = tscEndBuffer[1];
+    time_buf_u16[5] = tscEndBuffer[2];
 
     sys_mod.unblock_cmd_stream();
 }

@@ -127,26 +127,18 @@ def run_spmv_on_device(
             y = pe_id // width
 
             # CSL buffer: [start[0], start[1], start[2], end[0], end[1], end[2]]
-            # 6×u16 values packed as 3×u32 when using MEMCPY_32BIT
-            # Each u32 contains 2 u16 values: u32 = (u16_high << 16) | u16_low
-            ts_raw_u32 = np.zeros(3, dtype=np.uint32)
+            # Cerebras official pattern: use MEMCPY_16BIT directly
+            ts_raw = np.zeros(6, dtype=np.uint16)
             runner.memcpy_d2h(
-                ts_raw_u32,
+                ts_raw,
                 sym_time_buf,
                 x, y, 1, 1,
-                3,
+                6,
                 streaming=False,
-                data_type=MemcpyDataType.MEMCPY_32BIT,
+                data_type=MemcpyDataType.MEMCPY_16BIT,
                 order=MemcpyOrder.ROW_MAJOR,
                 nonblock=False
             )
-
-            # Debug: print raw u32 values first
-            if len(all_pe_ids) < 3:
-                logger.info(f"DEBUG PE {pe_id}: ts_raw_u32={ts_raw_u32} (hex: {[hex(x) for x in ts_raw_u32]})")
-
-            # Reinterpret as u16 array (each u32 becomes 2 u16 values)
-            ts_raw = ts_raw_u32.view(np.uint16)
 
             # Extract start and end timestamps (each is 3×u16)
             start_buf = ts_raw[0:3]
