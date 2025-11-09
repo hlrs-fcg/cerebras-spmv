@@ -3,7 +3,7 @@
 Parameter Sweep Runner
 
 Runs SpMV benchmarks with multiple parameter configurations from a CSV file.
-Reports success/failure for each run without detailed analysis.
+Reports success/failure for each run with detailed exit reason tracking.
 """
 
 import argparse
@@ -12,7 +12,8 @@ import subprocess
 import sys
 import logging
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Tuple
+from collections import defaultdict
 
 logging.basicConfig(
     level=logging.INFO,
@@ -61,7 +62,33 @@ def load_sweep_config(csv_path: str) -> List[Dict[str, str]]:
     return configs
 
 
-def run_benchmark(config: Dict[str, str], run_script: str, result_csv: str) -> bool:
+def get_exit_reason_from_csv(result_csv: str) -> str:
+    """
+    Read the most recent exit_reason from the benchmark CSV.
+
+    Args:
+        result_csv: Path to benchmark results CSV
+
+    Returns:
+        Exit reason string or "UNKNOWN" if not found
+    """
+    csv_file = Path(result_csv)
+    if not csv_file.exists():
+        return "UNKNOWN"
+
+    try:
+        with open(csv_file, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            if rows and 'exit_reason' in rows[-1]:
+                return rows[-1]['exit_reason']
+    except Exception:
+        pass
+
+    return "UNKNOWN"
+
+
+def run_benchmark(config: Dict[str, str], run_script: str, result_csv: str, verbose: bool = False) -> Tuple[bool, str, str]:
     """
     Run a single benchmark configuration.
 
@@ -69,9 +96,10 @@ def run_benchmark(config: Dict[str, str], run_script: str, result_csv: str) -> b
         config: Parameter dictionary
         run_script: Path to run.py script
         result_csv: Path to save benchmark results
+        verbose: Whether to show detailed output
 
     Returns:
-        True if run succeeded, False otherwise
+        Tuple of (success, exit_reason, error_output)
     """
     # Build command
     cmd = [sys.executable, run_script]
@@ -102,13 +130,37 @@ def run_benchmark(config: Dict[str, str], run_script: str, result_csv: str) -> b
             text=True,
             timeout=600  # 10 minute timeout
         )
-        return result.returncode == 0
-    except subprocess.TimeoutExpired:
-        logger.error("  TIMEOUT")
-        return False
+
+        success = result.returncode == 0
+
+        # Get exit reason from CSV
+        exit_reason = get_exit_reason_from_csv(result_csv)
+
+        # Capture error output for debugging
+        error_output = ""
+        if not success:
+            if result.stderr:
+                error_output = result.stderr
+            elif result.stdout:
+                # Sometimes errors are in stdout
+                error_output = result.stdout
+
+        if verbose and error_output:
+            logger.info(f"\n  Output:\n{error_output}")
+
+        return success, exit_reason, error_output
+
+    except subprocess.TimeoutExpired as e:
+        error_output = e.stderr if hasattr(e, 'stderr') and e.stderr else "Process timed out after 600 seconds"
+        if verbose:
+            logger.info(f"\n  Output:\n{error_output}")
+        return False, "TIMEOUT", error_output
+
     except Exception as e:
-        logger.error(f"  ERROR: {e}")
-        return False
+        error_output = str(e)
+        if verbose:
+            logger.info(f"\n  Output:\n{error_output}")
+        return False, "RUNTIME_ERROR", error_output
 
 
 def main():
@@ -163,6 +215,8 @@ Usage:
 
     successes = 0
     failures = 0
+    exit_reason_counts = defaultdict(int)
+    failed_configs = []
 
     for i, config in enumerate(configs, 1):
         # Format configuration for display
@@ -172,14 +226,18 @@ Usage:
 
         logger.info(f"\n[{i}/{len(configs)}] Running: {config_str}")
 
-        success = run_benchmark(config, str(run_script), args.results)
+        success, exit_reason, error_output = run_benchmark(config, str(run_script), args.results, args.verbose)
+
+        # Track exit reason
+        exit_reason_counts[exit_reason] += 1
 
         if success:
             logger.info(f"  ✓ SUCCESS")
             successes += 1
         else:
-            logger.info(f"  ✗ FAILED")
+            logger.info(f"  ✗ FAILED - {exit_reason}")
             failures += 1
+            failed_configs.append((config_str, exit_reason, error_output))
 
             if not args.continue_on_error:
                 logger.error("\nStopping sweep due to failure (use --continue-on-error to continue)")
@@ -189,10 +247,43 @@ Usage:
     logger.info("\n" + "="*80)
     logger.info("Parameter Sweep Complete")
     logger.info("="*80)
-    logger.info(f"Total runs:    {successes + failures}")
+    total_runs = successes + failures
+    logger.info(f"Total runs:    {total_runs}")
     logger.info(f"Successful:    {successes}")
     logger.info(f"Failed:        {failures}")
-    logger.info(f"Success rate:  {successes/(successes+failures)*100:.1f}%")
+    logger.info(f"Success rate:  {successes/total_runs*100:.1f}%")
+    logger.info("")
+
+    # Print exit reason breakdown
+    logger.info("Exit Reason Breakdown:")
+    logger.info("-" * 80)
+    logger.info(f"{'Exit Reason':<25} {'Count':<10} {'Percentage':<15}")
+    logger.info("-" * 80)
+
+    # Sort by count (descending)
+    for exit_reason, count in sorted(exit_reason_counts.items(), key=lambda x: x[1], reverse=True):
+        percentage = (count / total_runs) * 100
+        logger.info(f"{exit_reason:<25} {count:<10} {percentage:>6.1f}%")
+
+    logger.info("-" * 80)
+    logger.info("")
+
+    # Print failed configurations details
+    if failed_configs and not args.verbose:
+        logger.info("Failed Configurations:")
+        logger.info("-" * 80)
+        for config_str, exit_reason, error_output in failed_configs[:10]:  # Show first 10
+            logger.info(f"  {config_str}")
+            logger.info(f"    Exit Reason: {exit_reason}")
+            # Show first line of error if available
+            if error_output:
+                first_error_line = error_output.split('\n')[0][:120]
+                logger.info(f"    Error: {first_error_line}")
+        if len(failed_configs) > 10:
+            logger.info(f"  ... and {len(failed_configs) - 10} more failures")
+        logger.info("-" * 80)
+        logger.info("")
+
     logger.info(f"Results saved: {args.results}")
     logger.info("="*80)
 

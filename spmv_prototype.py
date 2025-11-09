@@ -252,33 +252,75 @@ def generate_random_sparse_matrix(rows: int, cols: int, density: float, seed: in
 
 
 def validate_results(y_computed: np.ndarray, y_reference: np.ndarray, tolerance: float = 1e-4) -> bool:
-    """Validate results with appropriate floating-point tolerances."""
-    diff = np.abs(y_computed - y_reference)
-    max_diff = np.max(diff)
+    """
+    Validate SpMV results using relative norm of the difference.
 
-    nonzero_mask = np.abs(y_reference) > 1e-10
-    if np.any(nonzero_mask):
-        rel_diff = diff[nonzero_mask] / np.abs(y_reference[nonzero_mask])
-        max_rel_diff = np.max(rel_diff)
+    Computes: ||y_computed - y_reference|| / ||y_reference||
+
+    This is a standard numerical validation approach that:
+    - Scales with the magnitude of the result
+    - Is robust to numerical precision issues
+    - Gives a single, interpretable error metric
+
+    Args:
+        y_computed: Result from device/computation
+        y_reference: Ground truth from numpy (A.dot(x))
+        tolerance: Maximum acceptable relative error (default 1e-4)
+
+    Returns:
+        True if validation passes, False otherwise
+    """
+    # Check for shape mismatch
+    if y_computed.shape != y_reference.shape:
+        logging.error(f"❌ Shape mismatch: computed {y_computed.shape} vs reference {y_reference.shape}")
+        return False
+
+    # Check for NaN or Inf
+    if np.any(np.isnan(y_computed)) or np.any(np.isinf(y_computed)):
+        logging.error(f"❌ Invalid values in computed results (NaN or Inf)")
+        return False
+
+    # Calculate norms
+    diff_norm = np.linalg.norm(y_computed - y_reference)
+    ref_norm = np.linalg.norm(y_reference)
+
+    # Avoid division by zero
+    if ref_norm < 1e-15:
+        # Reference is essentially zero, check if computed is also near zero
+        if diff_norm < tolerance:
+            logging.info(f"✓ Validation PASSED (both results near zero)")
+            logging.info(f"  ||diff|| = {diff_norm:.2e}")
+            return True
+        else:
+            logging.error(f"❌ Validation FAILED: reference is zero but computed is not")
+            logging.error(f"  ||computed|| = {np.linalg.norm(y_computed):.2e}")
+            return False
+
+    # Relative error using norm
+    relative_error = diff_norm / ref_norm
+
+    passed = relative_error < tolerance
+
+    if passed:
+        logging.info(f"✓ Validation PASSED")
+        logging.info(f"  Relative error: {relative_error:.2e} (tolerance: {tolerance:.2e})")
+        logging.info(f"  ||y_computed - y_reference|| / ||y_reference|| = {diff_norm:.2e} / {ref_norm:.2e}")
     else:
-        max_rel_diff = 0.0
+        logging.error(f"❌ Validation FAILED")
+        logging.error(f"  Relative error: {relative_error:.2e} (tolerance: {tolerance:.2e})")
+        logging.error(f"  ||y_computed - y_reference|| = {diff_norm:.2e}")
+        logging.error(f"  ||y_reference|| = {ref_norm:.2e}")
 
-    if max_diff < tolerance or (np.any(nonzero_mask) and max_rel_diff < tolerance):
-        return True
+        # Show some worst mismatches for debugging
+        abs_diff = np.abs(y_computed - y_reference)
+        worst_idx = np.argsort(abs_diff)[-5:][::-1]
+        logging.error(f"  Worst 5 mismatches:")
+        for idx in worst_idx:
+            logging.error(f"    Row {idx}: computed={y_computed[idx]:.6e}, "
+                         f"reference={y_reference[idx]:.6e}, "
+                         f"diff={abs_diff[idx]:.2e}")
 
-    logging.error(f"❌ Validation failed: errors exceed tolerance {tolerance}")
-    logging.error(f"  Max absolute error: {max_diff:.2e}")
-    if np.any(nonzero_mask):
-        logging.error(f"  Max relative error: {max_rel_diff:.2e}")
-
-    worst_idx = np.argsort(diff)[-5:][::-1]
-    logging.error(f"  Worst mismatches:")
-    for idx in worst_idx:
-        logging.error(f"    Row {idx}: computed={y_computed[idx]:.6f}, "
-                     f"reference={y_reference[idx]:.6f}, "
-                     f"diff={diff[idx]:.2e}")
-
-    return False
+    return passed
 
 
 def main():

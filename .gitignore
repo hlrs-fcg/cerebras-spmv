@@ -178,4 +178,5 @@ pyrightconfig.json
 **.*.json
 **.json
 *.tar.gz
-
+.idea/
+todo.md

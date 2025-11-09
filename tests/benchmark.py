@@ -31,6 +31,9 @@ class BenchmarkResult:
     # Metadata
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     validation_passed: bool = True
+    exit_reason: str = "SUCCESS"
+    error_message: str = ""
+    relative_error: float = 0.0  # ||y_computed - y_reference|| / ||y_reference||
 
     # Matrix parameters
     matrix_rows: int = 0
