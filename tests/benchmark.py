@@ -107,20 +107,14 @@ class BenchmarkResult:
         return cls(**filtered_data)
 
     def summary(self) -> str:
-        """Generate a human-readable summary."""
-        lines = [
-            f"=== Benchmark Result ({self.timestamp}) ===",
-            f"Matrix: {self.matrix_rows}×{self.matrix_cols}, density={self.density}, NNZ={self.total_nnz}",
-            f"PEs: {self.num_pes} ({self.grid_width}×{self.grid_height}), {self.num_active_pes} active",
-            f"Memory: {self.max_memory_per_pe/1024:.2f} KB max ({self.memory_utilization_pct:.1f}%)",
-            f"Timing: compile={self.compile_time:.2f}s, H2D={self.memcpy_h2d_time:.3f}s, "
-            f"compute_hw={self.compute_time_hw_avg:.6f}s, D2H={self.memcpy_d2h_time:.3f}s",
-            f"Performance: {self.gflops_hw:.2f} GFLOPS",
-            f"Total: {self.total_time:.2f}s",
-            f"Load balance: imbalance={self.load_imbalance_pct:.1f}%",
-            f"Validation: {'PASSED' if self.validation_passed else 'FAILED'}",
-        ]
-        return '\n'.join(lines)
+        """Generate a minimal human-readable summary with key metrics."""
+        return (
+            f"[{self.timestamp}] "
+            f"{self.matrix_rows}×{self.matrix_cols} (NNZ={self.total_nnz}) | "
+            f"{self.num_pes} PEs | "
+            f"compute={self.compute_time_hw_avg:.6f}s | "
+            f"{'PASSED' if self.validation_passed else 'FAILED'}"
+        )
 
 
 def save_benchmark(result: BenchmarkResult,
@@ -224,35 +218,3 @@ def load_benchmarks(csv_path: str = "tests/benchmark_results.csv") -> List[Bench
     return results
 
 
-def print_benchmark_summary(csv_path: str = "tests/benchmark_results.csv",
-                            num_recent: int = 10) -> None:
-    """
-    Print summary of recent benchmark results.
-
-    Args:
-        csv_path: Path to CSV file
-        num_recent: Number of recent results to show
-    """
-    results = load_benchmarks(csv_path)
-
-    if not results:
-        logger.info("No benchmark results found.")
-        return
-
-    logger.info("="*80)
-    logger.info(f"Benchmark Results Summary ({len(results)} total)")
-    logger.info("="*80)
-
-    # Show most recent results
-    recent = results[-num_recent:] if len(results) > num_recent else results
-
-    for i, result in enumerate(reversed(recent), 1):
-        logger.info(f"\n{i}. {result.timestamp}")
-        logger.info(f"   Matrix: {result.matrix_rows}×{result.matrix_cols} (NNZ={result.total_nnz})")
-        logger.info(f"   PEs: {result.num_pes} ({result.grid_width}×{result.grid_height})")
-        logger.info(f"   Time: {result.total_time:.2f}s (compute_hw: {result.compute_time_hw_avg:.6f}s)")
-        logger.info(f"   Performance: {result.gflops_hw:.2f} GFLOPS")
-        logger.info(f"   Memory: {result.max_memory_per_pe/1024:.2f} KB ({result.memory_utilization_pct:.1f}%)")
-        logger.info(f"   Status: {'✓ PASSED' if result.validation_passed else '✗ FAILED'}")
-
-    logger.info("\n" + "="*80)

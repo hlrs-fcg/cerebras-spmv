@@ -42,7 +42,7 @@ def print_summary(results, num_recent=10):
         status = "PASS" if result.validation_passed else "FAIL"
 
         logger.info(f"{i:<4} {timestamp_short:<20} {matrix_str:<15} {result.num_pes:<8} {grid_str:<8} "
-                   f"{result.compute_time:<12.4f} {result.total_time:<10.2f} "
+                   f"{result.compute_time_hw_avg:<12.6f} {result.total_time:<10.2f} "
                    f"{memory_str:<12} {status:<8}")
 
     logger.info("="*100)
@@ -55,7 +55,22 @@ def print_detailed(results, index):
         return
 
     result = results[index]
-    logger.info(result.summary())
+    logger.info("="*80)
+    logger.info(f"Benchmark Result #{index}")
+    logger.info("="*80)
+    logger.info(f"Timestamp:     {result.timestamp}")
+    logger.info(f"Matrix:        {result.matrix_rows}×{result.matrix_cols}, density={result.density}, NNZ={result.total_nnz}")
+    logger.info(f"PEs:           {result.num_pes} ({result.grid_width}×{result.grid_height}), {result.num_active_pes} active")
+    logger.info(f"Memory:        {result.max_memory_per_pe/1024:.2f} KB max ({result.memory_utilization_pct:.1f}%)")
+    logger.info(f"Compile Time:  {result.compile_time:.2f}s")
+    logger.info(f"H2D Time:      {result.memcpy_h2d_time:.3f}s")
+    logger.info(f"Compute (HW):  {result.compute_time_hw_avg:.6f}s (min={result.compute_time_hw_min:.6f}, max={result.compute_time_hw_max:.6f})")
+    logger.info(f"D2H Time:      {result.memcpy_d2h_time:.3f}s")
+    logger.info(f"Total Time:    {result.total_time:.2f}s")
+    logger.info(f"Performance:   {result.gflops_hw:.2f} GFLOPS")
+    logger.info(f"Load Balance:  imbalance={result.load_imbalance_pct:.1f}%")
+    logger.info(f"Validation:    {'PASSED' if result.validation_passed else 'FAILED'}")
+    logger.info("="*80)
 
 
 def print_statistics(results):
@@ -79,11 +94,11 @@ def print_statistics(results):
 
     # Compute statistics
     avg_compile = sum(r.compile_time for r in successful) / len(successful)
-    avg_compute = sum(r.compute_time for r in successful) / len(successful)
+    avg_compute = sum(r.compute_time_hw_avg for r in successful) / len(successful)
     avg_total = sum(r.total_time for r in successful) / len(successful)
 
-    min_compute = min(r.compute_time for r in successful)
-    max_compute = max(r.compute_time for r in successful)
+    min_compute = min(r.compute_time_hw_avg for r in successful)
+    max_compute = max(r.compute_time_hw_avg for r in successful)
 
     avg_memory_util = sum(r.memory_utilization_pct for r in successful) / len(successful)
     max_memory_util = max(r.memory_utilization_pct for r in successful)
