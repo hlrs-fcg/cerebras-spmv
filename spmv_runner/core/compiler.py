@@ -23,6 +23,11 @@ def compile_csl(
 ):
     logger.info(f"Compiling CSL for {width}×{height} PE grid...")
 
+    # Resolve paths - find project root (where run.py is)
+    # Assuming this file is in spmv_runner/core/, project root is 2 levels up
+    project_root = Path(__file__).resolve().parent.parent.parent
+    src_path = str(project_root / "src")
+
     out_path = str(Path(out_path).resolve())
     Path(out_path).mkdir(parents=True, exist_ok=True)
 
@@ -39,7 +44,7 @@ def compile_csl(
 
     with SdkCompiler(resource_cpu=24000, resource_mem=64<<30, disable_version_check=True) as compiler:
         artifact_id = compiler.compile(
-            app_path="src",
+            app_path=src_path,
             csl_main="layout.csl",
             options=ARGS,
             out_path=out_path,

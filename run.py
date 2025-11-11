@@ -8,6 +8,7 @@ import argparse
 import logging
 import time
 from enum import Enum
+from pathlib import Path
 
 import numpy as np
 
@@ -47,6 +48,9 @@ class ExitReason(Enum):
 
 
 def main():
+    # Get script directory for resolving relative paths
+    script_dir = Path(__file__).resolve().parent
+
     parser = argparse.ArgumentParser(
         description='SpMV CSL Multi-PE Implementation',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -89,6 +93,16 @@ Examples:
     parser.add_argument('--verbose', '-v', action='store_true',
                        help='Enable verbose debug output')
     args = parser.parse_args()
+
+    # Resolve all paths relative to script directory
+    if args.artifact_path and not Path(args.artifact_path).is_absolute():
+        args.artifact_path = str(script_dir / args.artifact_path)
+    if args.out_path and not Path(args.out_path).is_absolute():
+        args.out_path = str(script_dir / args.out_path)
+    if args.save_benchmark and not Path(args.save_benchmark).is_absolute():
+        args.save_benchmark = str(script_dir / args.save_benchmark)
+    if args.save_results and not Path(args.save_results).is_absolute():
+        args.save_results = str(script_dir / args.save_results)
 
     # Configure logging level
     if args.verbose:
@@ -269,8 +283,6 @@ Examples:
         # Save result vectors if requested
         if args.save_results:
             try:
-                from pathlib import Path
-
                 result_path = Path(args.save_results)
                 result_path.parent.mkdir(parents=True, exist_ok=True)
 
