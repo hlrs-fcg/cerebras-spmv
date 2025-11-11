@@ -181,7 +181,6 @@ artifact.json
 *.elf
 
 # Benchmark and test results
-tests/benchmark_results.csv
 *.csv.bak
 *.npz
 
