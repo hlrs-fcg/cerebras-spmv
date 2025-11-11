@@ -23,9 +23,6 @@ def run_spmv_on_device(
     width: int,
     height: int
 ):
-
-    run_start = time.time()
-
     spmv = MatchedPairsSpMV(csr_matrix, num_pes)
     pe_data = spmv.distribute_by_nnz()
     spmv.prepare_matched_pairs(pe_data, vector_x)
@@ -109,10 +106,7 @@ def run_spmv_on_device(
         memcpy_h2d_time = time.time() - memcpy_h2d_start
         logger.info(f"Data transfer H2D: {memcpy_h2d_time:.3f}s")
 
-        compute_start = time.time()
         runner.launch("spmv", nonblock=False)
-        compute_time_python = time.time() - compute_start
-        logger.info(f"Computation (Python): {compute_time_python:.3f}s")
 
         logger.info("Retrieving hardware timestamps from PEs...")
         all_pe_cycles = []
@@ -176,9 +170,6 @@ def run_spmv_on_device(
         logger.info(f"Avg PE:  {avg_time_us:>10.3f} µs ({avg_cycles:>10,.0f} cycles)")
         logger.info(f"Max PE:  {max_time_us:>10.3f} µs ({max_cycles:>10,} cycles)")
         logger.info(f"Std Dev: {std_time_us:>10.3f} µs ({std_cycles:>10,.0f} cycles)")
-        logger.info(f"-"*60)
-        logger.info(f"Python time (with overhead): {compute_time_python:.6f} s")
-        logger.info(f"Overhead factor: {compute_time_python / avg_time_s:.1f}×")
         logger.info("="*60 + "\n")
 
         memcpy_d2h_start = time.time()
@@ -211,12 +202,9 @@ def run_spmv_on_device(
 
     result_vector = spmv.gather_results(pe_data, all_results)
 
-    run_time = time.time() - run_start
-
     timing_info = {
         'total_run': memcpy_h2d_time + avg_time_s + memcpy_d2h_time,
         'memcpy_h2d': memcpy_h2d_time,
-        'compute_python': compute_time_python,
         'compute_hw_min': min_time_s,
         'compute_hw_avg': avg_time_s,
         'compute_hw_max': max_time_s,

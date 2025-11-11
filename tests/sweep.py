@@ -232,7 +232,7 @@ Usage:
         exit_reason_counts[exit_reason] += 1
 
         if success:
-            logger.info(f"  ✓ SUCCESS")
+            logger.info("  ✓ SUCCESS")
             successes += 1
         else:
             logger.info(f"  ✗ FAILED - {exit_reason}")

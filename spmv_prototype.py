@@ -109,7 +109,7 @@ class MatchedPairsSpMV:
             avg_nnz = np.mean(nnz_counts)
             imbalance = (max_nnz - min_nnz) / avg_nnz * 100 if avg_nnz > 0 else 0
             
-            logging.info(f"Load balancing:")
+            logging.info("Load balancing:")
             logging.info(f"  Min NNZ/PE: {min_nnz}")
             logging.info(f"  Max NNZ/PE: {max_nnz}")
             logging.info(f"  Avg NNZ/PE: {avg_nnz:.1f}")
@@ -277,7 +277,7 @@ def validate_results(y_computed: np.ndarray, y_reference: np.ndarray, tolerance:
 
     # Check for NaN or Inf
     if np.any(np.isnan(y_computed)) or np.any(np.isinf(y_computed)):
-        logging.error(f"❌ Invalid values in computed results (NaN or Inf)")
+        logging.error("❌ Invalid values in computed results (NaN or Inf)")
         return False
 
     # Calculate norms
@@ -288,11 +288,11 @@ def validate_results(y_computed: np.ndarray, y_reference: np.ndarray, tolerance:
     if ref_norm < 1e-15:
         # Reference is essentially zero, check if computed is also near zero
         if diff_norm < tolerance:
-            logging.info(f"✓ Validation PASSED (both results near zero)")
+            logging.info("✓ Validation PASSED (both results near zero)")
             logging.info(f"  ||diff|| = {diff_norm:.2e}")
             return True
         else:
-            logging.error(f"❌ Validation FAILED: reference is zero but computed is not")
+            logging.error("❌ Validation FAILED: reference is zero but computed is not")
             logging.error(f"  ||computed|| = {np.linalg.norm(y_computed):.2e}")
             return False
 
@@ -302,11 +302,11 @@ def validate_results(y_computed: np.ndarray, y_reference: np.ndarray, tolerance:
     passed = relative_error < tolerance
 
     if passed:
-        logging.info(f"✓ Validation PASSED")
+        logging.info("✓ Validation PASSED")
         logging.info(f"  Relative error: {relative_error:.2e} (tolerance: {tolerance:.2e})")
         logging.info(f"  ||y_computed - y_reference|| / ||y_reference|| = {diff_norm:.2e} / {ref_norm:.2e}")
     else:
-        logging.error(f"❌ Validation FAILED")
+        logging.error("❌ Validation FAILED")
         logging.error(f"  Relative error: {relative_error:.2e} (tolerance: {tolerance:.2e})")
         logging.error(f"  ||y_computed - y_reference|| = {diff_norm:.2e}")
         logging.error(f"  ||y_reference|| = {ref_norm:.2e}")
@@ -314,7 +314,7 @@ def validate_results(y_computed: np.ndarray, y_reference: np.ndarray, tolerance:
         # Show some worst mismatches for debugging
         abs_diff = np.abs(y_computed - y_reference)
         worst_idx = np.argsort(abs_diff)[-5:][::-1]
-        logging.error(f"  Worst 5 mismatches:")
+        logging.error("  Worst 5 mismatches:")
         for idx in worst_idx:
             logging.error(f"    Row {idx}: computed={y_computed[idx]:.6e}, "
                          f"reference={y_reference[idx]:.6e}, "

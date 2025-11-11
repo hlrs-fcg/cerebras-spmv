@@ -75,4 +75,32 @@ Traditional SpMV requires vector broadcast and index lookup during computation. 
 approach pre-gathers vector values on host using column indices, sending matrix values with their
 corresponding vector values as pairs. This eliminates communication and indexing overhead on PEs.
 
-**Memory per PE**: ~8 bytes/nonzero + ~8 bytes/row
+**Memory per PE**: ~8 bytes/nonzero + ~8 bytes/row + padding
+
+## Current Limitations 
+### Static Memory Allocation
+Data can be better load balanced. Currently there is safety padding in all PEs
+for edge cases. Sometimes a small percentage of the PEs also doesn't run (1-5%)
+due to the currently implemented load balancing. For possible improvements see
+below.
+
+### Benchmark Storage
+`.csv` is used for benchmark results, which is fragile when schema changes.
+There is migration logic handling this, but SQLite would provide better schema
+versioning, type safety, and query capabilities.
+
+### Load Balancing
+Current distribution uses simple NNZ-based balancing. Could improve with:
+- Row-based partitioning strategies
+- Dynamic rebalancing based on computation patterns
+- Better handling of highly skewed distributions
+
+### Hardware Constraints
+- 48 KB memory limit per PE
+- Single precision (f32) only
+
+### Matrix Input Format
+Currently only supports CSR format as input. Could probably trivially implement:
+- CSC format support 
+- Direct COO input 
+- Matrix Market file reading 

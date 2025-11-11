@@ -5,25 +5,14 @@ Phase 2: Extends single PE to multiple PEs with timing and memory checks
 """
 
 import argparse
-import numpy as np
 import logging
 import time
 from enum import Enum
 
+import numpy as np
+
 from spmv_prototype import generate_random_sparse_matrix, MatchedPairsSpMV, validate_results
-
-
-class ExitReason(Enum):
-    """Exit reasons for benchmark runs."""
-    SUCCESS = "SUCCESS"
-    MEMORY_EXCEEDED = "MEMORY_EXCEEDED"
-    COMPILATION_FAILED = "COMPILATION_FAILED"
-    RUNTIME_ERROR = "RUNTIME_ERROR"
-    VALIDATION_FAILED = "VALIDATION_FAILED"
-    TIMEOUT = "TIMEOUT"
-
 from tests.benchmark import BenchmarkResult, save_benchmark
-
 from spmv_runner.core import (
     calculate_pe_grid,
     print_grid_info,
@@ -31,7 +20,6 @@ from spmv_runner.core import (
     compile_csl,
     run_spmv_on_device
 )
-
 from spmv_runner.utils import (
     check_memory_feasibility,
     print_memory_analysis,
@@ -46,6 +34,16 @@ logging.basicConfig(
     format='%(levelname)s: %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+class ExitReason(Enum):
+    """Exit reasons for benchmark runs."""
+    SUCCESS = "SUCCESS"
+    MEMORY_EXCEEDED = "MEMORY_EXCEEDED"
+    COMPILATION_FAILED = "COMPILATION_FAILED"
+    RUNTIME_ERROR = "RUNTIME_ERROR"
+    VALIDATION_FAILED = "VALIDATION_FAILED"
+    TIMEOUT = "TIMEOUT"
 
 
 def main():
@@ -88,7 +86,14 @@ Examples:
                        help='Path to save benchmark results CSV (use empty string to disable)')
     parser.add_argument('--save-results', type=str, default='',
                        help='Path to save result vectors as .npz file (computed, reference, input matrix/vector)')
+    parser.add_argument('--verbose', '-v', action='store_true',
+                       help='Enable verbose debug output')
     args = parser.parse_args()
+
+    # Configure logging level
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logger.setLevel(logging.DEBUG)
 
     # Initialize state variables
     total_start = time.time()
@@ -265,23 +270,19 @@ Examples:
         if args.save_results:
             try:
                 from pathlib import Path
-                import scipy.sparse as sp
 
                 result_path = Path(args.save_results)
                 result_path.parent.mkdir(parents=True, exist_ok=True)
 
-                # Save as npz with all relevant data
                 np.savez(
                     result_path,
                     y_computed=y_computed,
                     y_reference=y_reference,
                     x=x,
-                    # Save sparse matrix in CSR format
                     matrix_data=A.data,
                     matrix_indices=A.indices,
                     matrix_indptr=A.indptr,
                     matrix_shape=A.shape,
-                    # Metadata
                     num_pes=num_pes,
                     validation_passed=passed,
                     relative_error=np.linalg.norm(y_computed - y_reference) / np.linalg.norm(y_reference) if np.linalg.norm(y_reference) > 0 else 0
@@ -308,14 +309,12 @@ Examples:
         avg_memory = np.mean([check_memory_feasibility([pe])[1] for pe in pe_data_temp])
         memory_utilization = (max_memory / 48000) * 100 if max_memory > 0 else 0
 
-        # Count active vs idle PEs
+        # Count active PEs
         num_active = sum(1 for pe in pe_data_temp if pe['num_rows'] > 0)
-        num_idle = num_pes - num_active
 
         # Calculate performance metrics
         flops = 2 * A.nnz
         gflops_hw = (flops / timing_info['compute_hw_avg']) / 1e9 if timing_info['compute_hw_avg'] > 0 else 0
-        gflops_python = (flops / timing_info['compute_python']) / 1e9 if timing_info['compute_python'] > 0 else 0
 
     except Exception as e:
         # Catch any unexpected exceptions
@@ -332,7 +331,7 @@ Examples:
             A = type('obj', (object,), {'nnz': 0, 'shape': (args.rows, args.cols)})()
         if timing_info is None:
             timing_info = {
-                'memcpy_h2d': 0, 'compute_python': 0, 'compute_hw_min': 0,
+                'memcpy_h2d': 0, 'compute_hw_min': 0,
                 'compute_hw_avg': 0, 'compute_hw_max': 0, 'compute_hw_std': 0,
                 'compute_hw_cycles_min': 0, 'compute_hw_cycles_avg': 0,
                 'compute_hw_cycles_max': 0, 'compute_hw_cycles_std': 0,
@@ -342,8 +341,8 @@ Examples:
             pe_data_temp = [{'total_nnz': 0, 'num_rows': 0}]
 
         min_nnz_pe = max_nnz_pe = avg_nnz_pe = load_imbalance = 0
-        num_active = num_idle = 0
-        gflops_hw = gflops_python = 0
+        num_active = 0
+        gflops_hw = 0
 
     finally:
         # Always save benchmark results
@@ -362,8 +361,8 @@ Examples:
 
             if not pe_data_temp:
                 min_nnz_pe = max_nnz_pe = avg_nnz_pe = load_imbalance = 0
-                num_active = num_idle = 0
-                gflops_hw = gflops_python = 0
+                num_active = 0
+                gflops_hw = 0
             else:
                 nnz_counts = [pe['total_nnz'] for pe in pe_data_temp if pe['total_nnz'] > 0]
                 if nnz_counts:
@@ -377,14 +376,12 @@ Examples:
                 avg_memory = np.mean([check_memory_feasibility([pe])[1] for pe in pe_data_temp]) if pe_data_temp else 0
                 memory_utilization = (max_memory / 48000) * 100 if max_memory > 0 else 0
                 num_active = sum(1 for pe in pe_data_temp if pe['num_rows'] > 0)
-                num_idle = num_pes - num_active
 
                 if timing_info and timing_info.get('compute_hw_avg', 0) > 0:
                     flops = 2 * A.nnz
                     gflops_hw = (flops / timing_info['compute_hw_avg']) / 1e9
-                    gflops_python = (flops / timing_info['compute_python']) / 1e9 if timing_info['compute_python'] > 0 else 0
                 else:
-                    gflops_hw = gflops_python = 0
+                    gflops_hw = 0
 
             benchmark = BenchmarkResult(
                 validation_passed=passed,
@@ -399,15 +396,11 @@ Examples:
                 grid_width=width,
                 grid_height=height,
                 architecture=args.arch,
-                fabric_dims_w=fabric_dims[0],
-                fabric_dims_h=fabric_dims[1],
                 max_memory_per_pe=max_memory,
                 avg_memory_per_pe=avg_memory,
-                memory_limit_per_pe=48000,
                 memory_utilization_pct=memory_utilization,
                 compile_time=compile_time,
                 memcpy_h2d_time=timing_info.get('memcpy_h2d', 0),
-                compute_time_python=timing_info.get('compute_python', 0),
                 compute_time_hw_min=timing_info.get('compute_hw_min', 0),
                 compute_time_hw_avg=timing_info.get('compute_hw_avg', 0),
                 compute_time_hw_max=timing_info.get('compute_hw_max', 0),
@@ -420,15 +413,11 @@ Examples:
                 total_run_time=timing_info.get('total_run', 0),
                 total_time=total_time,
                 gflops_hw=gflops_hw,
-                gflops_python=gflops_python,
                 min_nnz_per_pe=min_nnz_pe,
                 max_nnz_per_pe=max_nnz_pe,
                 avg_nnz_per_pe=avg_nnz_pe,
                 load_imbalance_pct=load_imbalance,
-                num_active_pes=num_active,
-                num_idle_pes=num_idle,
-                total_nnz_padded=total_nnz_padded,
-                max_rows_padded=max_rows_padded
+                num_active_pes=num_active
             )
 
             try:

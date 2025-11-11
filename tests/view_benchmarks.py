@@ -8,7 +8,7 @@ View and analyze saved SpMV benchmark results.
 import argparse
 import logging
 from pathlib import Path
-from benchmark import load_benchmarks, BenchmarkResult
+from benchmark import load_benchmarks
 
 logging.basicConfig(
     level=logging.INFO,
@@ -105,18 +105,18 @@ def print_statistics(results):
 
     avg_load_imbalance = sum(r.load_imbalance_pct for r in successful) / len(successful)
 
-    logger.info(f"\nTiming:")
+    logger.info("\nTiming:")
     logger.info(f"  Avg compile time: {avg_compile:.2f}s")
     logger.info(f"  Avg compute time: {avg_compute:.4f}s")
     logger.info(f"  Min compute time: {min_compute:.4f}s")
     logger.info(f"  Max compute time: {max_compute:.4f}s")
     logger.info(f"  Avg total time:   {avg_total:.2f}s")
 
-    logger.info(f"\nMemory:")
+    logger.info("\nMemory:")
     logger.info(f"  Avg utilization: {avg_memory_util:.1f}%")
     logger.info(f"  Max utilization: {max_memory_util:.1f}%")
 
-    logger.info(f"\nLoad Balance:")
+    logger.info("\nLoad Balance:")
     logger.info(f"  Avg imbalance: {avg_load_imbalance:.1f}%")
 
     # PE count distribution
@@ -124,7 +124,7 @@ def print_statistics(results):
     for r in successful:
         pe_counts[r.num_pes] = pe_counts.get(r.num_pes, 0) + 1
 
-    logger.info(f"\nPE Count Distribution:")
+    logger.info("\nPE Count Distribution:")
     for pe_count in sorted(pe_counts.keys()):
         logger.info(f"  {pe_count} PEs: {pe_counts[pe_count]} runs")
 
@@ -193,7 +193,7 @@ Examples:
     csv_path = Path(args.csv)
     if not csv_path.exists():
         logger.error(f"Benchmark file not found: {csv_path}")
-        logger.info(f"Run SpMV with --save-benchmark to create benchmark results.")
+        logger.info("Run SpMV with --save-benchmark to create benchmark results.")
         return 1
 
     results = load_benchmarks(str(csv_path))

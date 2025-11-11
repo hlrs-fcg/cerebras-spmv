@@ -12,7 +12,6 @@ import csv
 import argparse
 from pathlib import Path
 from typing import List, Dict
-import math
 
 
 def generate_same_nnz_configs(target_nnz: int, sizes: List[int], arch: str = 'wse3') -> List[Dict[str, str]]:

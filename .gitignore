@@ -174,9 +174,21 @@ poetry.toml
 pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+
+# Cerebras artifacts
+out/
+artifact.json
+*.elf
+
+# Benchmark and test results
+tests/benchmark_results.csv
+*.csv.bak
+*.npz
+
+# Project specific
 .json
 **.*.json
 **.json
 *.tar.gz
-.idea/
 todo.md
+.idea/

@@ -8,7 +8,6 @@ Provides summary statistics, performance trends, and failure analysis.
 import argparse
 import pandas as pd
 from pathlib import Path
-from typing import Optional
 
 
 def load_results(csv_path: str) -> pd.DataFrame:
@@ -67,7 +66,7 @@ def print_performance_stats(df: pd.DataFrame) -> None:
     # GFLOPS
     if 'gflops_hw' in successful.columns:
         gflops = successful['gflops_hw']
-        print(f"Hardware GFLOPS:")
+        print("Hardware GFLOPS:")
         print(f"  Min:    {gflops.min():.3f}")
         print(f"  Max:    {gflops.max():.3f}")
         print(f"  Mean:   {gflops.mean():.3f}")
@@ -77,7 +76,7 @@ def print_performance_stats(df: pd.DataFrame) -> None:
     # Compute time
     if 'compute_time_hw_avg' in successful.columns:
         compute_time = successful['compute_time_hw_avg']
-        print(f"Compute Time (seconds):")
+        print("Compute Time (seconds):")
         print(f"  Min:    {compute_time.min():.6f}")
         print(f"  Max:    {compute_time.max():.6f}")
         print(f"  Mean:   {compute_time.mean():.6f}")
@@ -87,7 +86,7 @@ def print_performance_stats(df: pd.DataFrame) -> None:
     # Memory utilization
     if 'memory_utilization_pct' in successful.columns:
         mem_util = successful['memory_utilization_pct']
-        print(f"Memory Utilization (%):")
+        print("Memory Utilization (%):")
         print(f"  Min:    {mem_util.min():.1f}%")
         print(f"  Max:    {mem_util.max():.1f}%")
         print(f"  Mean:   {mem_util.mean():.1f}%")
@@ -97,7 +96,7 @@ def print_performance_stats(df: pd.DataFrame) -> None:
     # Load imbalance
     if 'load_imbalance_pct' in successful.columns:
         load_imb = successful['load_imbalance_pct']
-        print(f"Load Imbalance (%):")
+        print("Load Imbalance (%):")
         print(f"  Min:    {load_imb.min():.1f}%")
         print(f"  Max:    {load_imb.max():.1f}%")
         print(f"  Mean:   {load_imb.mean():.1f}%")

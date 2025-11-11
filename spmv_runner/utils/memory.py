@@ -43,4 +43,9 @@ def print_memory_analysis(pe_data: list, max_memory: int = 48_000):
     avg_memory_used = np.mean([calculate_memory_per_pe(pe['num_rows'], pe['total_nnz'])
                                 for pe in pe_data])
 
-    logger.info(f"Memory: max {max_memory_used/1024:.2f} KB/PE, avg {avg_memory_used/1024:.2f} KB/PE (limit: {max_memory/1024:.0f} KB)")
+    memory_utilization_pct = (max_memory_used / max_memory) * 100
+
+    logger.info(f"Memory: max {max_memory_used/1024:.2f} KB/PE ({memory_utilization_pct:.1f}%), avg {avg_memory_used/1024:.2f} KB/PE (limit: {max_memory/1024:.0f} KB)")
+
+    if memory_utilization_pct > 80:
+        logger.warning("⚠️  Memory usage is above 80%! This may not fit on device together with program code and appliance overhead.")

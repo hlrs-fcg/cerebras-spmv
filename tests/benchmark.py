@@ -9,7 +9,7 @@ import logging
 from dataclasses import dataclass, field, asdict, fields
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -47,19 +47,15 @@ class BenchmarkResult:
     grid_width: int = 1
     grid_height: int = 1
     architecture: str = "wse3"
-    fabric_dims_w: int = 762
-    fabric_dims_h: int = 1172
 
     # Memory statistics (bytes)
     max_memory_per_pe: int = 0
     avg_memory_per_pe: float = 0.0
-    memory_limit_per_pe: int = 48000
-    memory_utilization_pct: float = 0.0  # max_memory / limit * 100
+    memory_utilization_pct: float = 0.0
 
     # Timing (seconds)
     compile_time: float = 0.0
     memcpy_h2d_time: float = 0.0
-    compute_time_python: float = 0.0
     compute_time_hw_min: float = 0.0
     compute_time_hw_avg: float = 0.0
     compute_time_hw_max: float = 0.0
@@ -74,21 +70,15 @@ class BenchmarkResult:
 
     # Performance metrics
     gflops_hw: float = 0.0
-    gflops_python: float = 0.0
 
     # Load balancing
     min_nnz_per_pe: int = 0
     max_nnz_per_pe: int = 0
     avg_nnz_per_pe: float = 0.0
-    load_imbalance_pct: float = 0.0  # (max - min) / avg * 100
+    load_imbalance_pct: float = 0.0
 
     # Additional metadata
-    num_active_pes: int = 0  # PEs with actual work
-    num_idle_pes: int = 0    # PEs with no work
-
-    # Compilation parameters
-    total_nnz_padded: int = 0  # Padded NNZ for compilation
-    max_rows_padded: int = 0   # Padded rows for compilation
+    num_active_pes: int = 0
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -136,19 +126,39 @@ def save_benchmark(result: BenchmarkResult,
 
     file_exists = csv_file.exists() and append
 
-    # Get field names from dataclass
     fieldnames = [f.name for f in fields(BenchmarkResult)]
+
+    # Check if we need to migrate the CSV schema
+    if file_exists:
+        with open(csv_file, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            existing_fieldnames = reader.fieldnames or []
+
+            if set(existing_fieldnames) != set(fieldnames):
+                logger.info(f"Migrating {csv_file.name} to new schema...")
+                existing_rows = list(reader)
+
+                backup_path = csv_file.with_suffix('.csv.bak')
+                csv_file.rename(backup_path)
+
+                with open(csv_file, 'w', newline='', encoding='utf-8') as new_f:
+                    writer = csv.DictWriter(new_f, fieldnames=fieldnames)
+                    writer.writeheader()
+
+                    for row in existing_rows:
+                        migrated_row = {fn: row.get(fn, '') for fn in fieldnames}
+                        writer.writerow(migrated_row)
+
+                logger.info(f"Migrated {len(existing_rows)} rows (backup: {backup_path.name})")
 
     mode = 'a' if file_exists else 'w'
 
     with open(csv_file, mode, newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
 
-        # Write header if new file
         if not file_exists:
             writer.writeheader()
 
-        # Write data
         writer.writerow(result.to_dict())
 
     logger.info(f"Benchmark saved to {csv_file.resolve()}")
@@ -175,40 +185,30 @@ def load_benchmarks(csv_path: str = "tests/benchmark_results.csv") -> List[Bench
 
     results = []
 
+    field_types = {f.name: f.type for f in fields(BenchmarkResult)}
+
     with open(csv_file, 'r', newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
 
         for row in reader:
-            # Convert string values to appropriate types
             typed_row = {}
             for key, value in row.items():
                 if value == '':
-                    # Handle empty values
-                    typed_row[key] = None
                     continue
 
-                # Infer type from field definition
-                field_type = None
-                for field_def in fields(BenchmarkResult):
-                    if field_def.name == key:
-                        field_type = field_def.type
-                        break
-
+                field_type = field_types.get(key)
                 if field_type is None:
                     typed_row[key] = value
-                elif field_type == int or field_type == 'int':
-                    typed_row[key] = int(float(value)) if value else 0
-                elif field_type == float or field_type == 'float':
-                    typed_row[key] = float(value) if value else 0.0
-                elif field_type == bool or field_type == 'bool':
+                elif field_type is int:
+                    typed_row[key] = int(float(value))
+                elif field_type is float:
+                    typed_row[key] = float(value)
+                elif field_type is bool:
                     typed_row[key] = value.lower() in ('true', '1', 'yes')
-                elif field_type == str or field_type == 'str':
+                elif field_type is str:
                     typed_row[key] = value
                 else:
                     typed_row[key] = value
-
-            # Filter None values
-            typed_row = {k: v for k, v in typed_row.items() if v is not None}
 
             try:
                 result = BenchmarkResult.from_dict(typed_row)
