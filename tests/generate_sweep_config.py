@@ -174,23 +174,22 @@ Examples:
 
     elif args.mode == 'size-sweep':
         # Sweep size for a fixed density
-        sizes = [1000, 2000, 3000, 5000, 7000, 10000, 15000, 20000, 30000, 50000]
+        sizes = [1000, 2000, 3000, 5000, 7000, 10000, 15000, 20000, 30000, 50000, 100000, 10000000]
         density = 0.001
         all_configs.extend(generate_size_sweep_configs(sizes, density, args.arch))
 
     elif args.mode == 'comprehensive':
         # Generate all three types
-
-        # 1. Same NNZ, different dimensions (~10000 NNZ)
+        # 1. Same NNZ, different dimensions (~1000000 NNZ)
         sizes_10k = [1000, 1414, 2000, 2828, 4000, 5657, 8000, 10000]
-        all_configs.extend(generate_same_nnz_configs(10000, sizes_10k, args.arch))
+        all_configs.extend(generate_same_nnz_configs(1000000, sizes_10k, args.arch))
 
-        # 2. Density sweep (5000x5000 matrix)
-        densities = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05]
-        all_configs.extend(generate_density_sweep_configs(5000, densities, args.arch))
+        # 2. Density sweep (500000x500000 matrix)
+        densities = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05] # up to 12.500.000.000 NNZ
+        all_configs.extend(generate_density_sweep_configs(500000, densities, args.arch))
 
         # 3. Size sweep (density=0.001)
-        sizes = [1000, 2000, 5000, 10000, 20000]
+        sizes = [1000, 2000, 5000, 10000, 20000, 50000] # should be up to 2.500.000.000 NNZ
         all_configs.extend(generate_size_sweep_configs(sizes, 0.001, args.arch))
 
     # Write to CSV
