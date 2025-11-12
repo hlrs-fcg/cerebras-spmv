@@ -231,7 +231,8 @@ Usage:
         # Track exit reason
         exit_reason_counts[exit_reason] += 1
 
-        if success:
+        # Count success based on exit_reason (not subprocess returncode)
+        if exit_reason == "SUCCESS":
             logger.info("  ✓ SUCCESS")
             successes += 1
         else:

@@ -437,7 +437,8 @@ Examples:
             except Exception as e:
                 logger.warning(f"Failed to save benchmark: {e}")
 
-    if not passed:
+    # Return appropriate exit code based on exit reason
+    if exit_reason != ExitReason.SUCCESS:
         return 1
 
     return 0
