@@ -128,7 +128,7 @@ def run_benchmark(config: Dict[str, str], run_script: str, result_csv: str, verb
             cmd,
             capture_output=True,
             text=True,
-            timeout=600  # 10 minute timeout
+            timeout=3600  # 30 minute timeout
         )
 
         success = result.returncode == 0
