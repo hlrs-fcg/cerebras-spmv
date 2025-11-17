@@ -6,6 +6,7 @@ Phase 2: Extends single PE to multiple PEs with timing and memory checks
 
 import argparse
 import logging
+import subprocess
 import time
 from enum import Enum
 from pathlib import Path
@@ -45,6 +46,21 @@ class ExitReason(Enum):
     RUNTIME_ERROR = "RUNTIME_ERROR"
     VALIDATION_FAILED = "VALIDATION_FAILED"
     TIMEOUT = "TIMEOUT"
+
+
+def get_git_commit_hash() -> str:
+    """Get current git commit hash (short form)."""
+    try:
+        result = subprocess.run(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=1
+        )
+        return result.stdout.strip()
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        return "unknown"
 
 
 def main():
@@ -201,9 +217,21 @@ Examples:
         print_grid_info(width, height, num_pes, fabric_dims, fabric_offsets)
 
         # Estimate required sizes per PE and check memory
+        # TIME PRECONDITIONING
+        precond_start = time.time()
         spmv_temp = MatchedPairsSpMV(A, num_pes)
+
+        distribute_start = time.time()
         pe_data_temp = spmv_temp.distribute_by_nnz()
+        distribute_time = time.time() - distribute_start
+
+        prepare_start = time.time()
         spmv_temp.prepare_matched_pairs(pe_data_temp, x)
+        prepare_matched_pairs_time = time.time() - prepare_start
+
+        total_precond_time = time.time() - precond_start
+
+        logger.info(f"Preconditioning: {total_precond_time*1000:.2f}ms (distribute: {distribute_time*1000:.2f}ms, prepare: {prepare_matched_pairs_time*1000:.2f}ms)")
 
         # Memory feasibility check
         is_feasible, max_memory, offending_pe = check_memory_feasibility(pe_data_temp)
@@ -321,12 +349,26 @@ Examples:
         avg_memory = np.mean([check_memory_feasibility([pe])[1] for pe in pe_data_temp])
         memory_utilization = (max_memory / 48000) * 100 if max_memory > 0 else 0
 
-        # Count active PEs
+        # Count active PEs and idle PEs
         num_active = sum(1 for pe in pe_data_temp if pe['num_rows'] > 0)
+        num_idle_pes = num_pes - num_active
+        pe_efficiency_pct = (num_active / num_pes) * 100 if num_pes > 0 else 0
 
         # Calculate performance metrics
         flops = 2 * A.nnz
-        gflops_hw = (flops / timing_info['compute_hw_avg']) / 1e9 if timing_info['compute_hw_avg'] > 0 else 0
+        # FIX: Use MAX time for parallel throughput (slowest PE determines total time)
+        gflops_hw_avg = (flops / timing_info['compute_hw_avg']) / 1e9 if timing_info['compute_hw_avg'] > 0 else 0
+        gflops_hw_max = (flops / timing_info['compute_hw_max']) / 1e9 if timing_info['compute_hw_max'] > 0 else 0
+
+        # Calculate arithmetic intensity (FLOPS per byte transferred)
+        bytes_h2d = (
+            sum(pe['total_nnz'] for pe in pe_data_temp) * 8 +  # matrix_values + vector_values (f32 each)
+            sum(pe['num_rows'] + 1 for pe in pe_data_temp) * 4 +  # row_offsets (i32)
+            num_active * 4  # num_rows per PE (i32)
+        )
+        bytes_d2h = sum(pe['num_rows'] for pe in pe_data_temp) * 4  # results (f32)
+        total_bytes = bytes_h2d + bytes_d2h
+        arithmetic_intensity = flops / total_bytes if total_bytes > 0 else 0
 
     except Exception as e:
         # Catch any unexpected exceptions
@@ -396,9 +438,11 @@ Examples:
                     gflops_hw = 0
 
             benchmark = BenchmarkResult(
+                git_commit=get_git_commit_hash(),
                 validation_passed=passed,
                 exit_reason=exit_reason.value,
                 error_message=error_message,
+                relative_error=np.linalg.norm(y_computed - y_reference) / np.linalg.norm(y_reference) if (y_computed is not None and y_reference is not None and np.linalg.norm(y_reference) > 0) else 0.0,
                 matrix_rows=args.rows,
                 matrix_cols=args.cols,
                 density=args.density,
@@ -411,6 +455,9 @@ Examples:
                 max_memory_per_pe=max_memory,
                 avg_memory_per_pe=avg_memory,
                 memory_utilization_pct=memory_utilization,
+                distribute_time=distribute_time if 'distribute_time' in locals() else 0.0,
+                prepare_matched_pairs_time=prepare_matched_pairs_time if 'prepare_matched_pairs_time' in locals() else 0.0,
+                total_precond_time=total_precond_time if 'total_precond_time' in locals() else 0.0,
                 compile_time=compile_time,
                 memcpy_h2d_time=timing_info.get('memcpy_h2d', 0),
                 compute_time_hw_min=timing_info.get('compute_hw_min', 0),
@@ -424,11 +471,15 @@ Examples:
                 memcpy_d2h_time=timing_info.get('memcpy_d2h', 0),
                 total_run_time=timing_info.get('total_run', 0),
                 total_time=total_time,
-                gflops_hw=gflops_hw,
+                gflops_hw_avg=gflops_hw if 'gflops_hw_avg' not in locals() else gflops_hw_avg,
+                gflops_hw_max=gflops_hw_max if 'gflops_hw_max' in locals() else 0.0,
+                arithmetic_intensity=arithmetic_intensity if 'arithmetic_intensity' in locals() else 0.0,
                 min_nnz_per_pe=min_nnz_pe,
                 max_nnz_per_pe=max_nnz_pe,
                 avg_nnz_per_pe=avg_nnz_pe,
                 load_imbalance_pct=load_imbalance,
+                num_idle_pes=num_idle_pes if 'num_idle_pes' in locals() else (num_pes - num_active),
+                pe_efficiency_pct=pe_efficiency_pct if 'pe_efficiency_pct' in locals() else ((num_active / num_pes * 100) if num_pes > 0 else 0),
                 num_active_pes=num_active
             )
 

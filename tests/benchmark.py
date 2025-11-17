@@ -30,6 +30,7 @@ class BenchmarkResult:
 
     # Metadata
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    git_commit: str = "unknown"  # Git commit hash
     validation_passed: bool = True
     exit_reason: str = "SUCCESS"
     error_message: str = ""
@@ -53,7 +54,12 @@ class BenchmarkResult:
     avg_memory_per_pe: float = 0.0
     memory_utilization_pct: float = 0.0
 
-    # Timing (seconds)
+    # Preconditioning timing (seconds)
+    distribute_time: float = 0.0  # Row distribution algorithm time
+    prepare_matched_pairs_time: float = 0.0  # Matched pairs transformation time
+    total_precond_time: float = 0.0  # Total CPU preprocessing time
+
+    # Device timing (seconds)
     compile_time: float = 0.0
     memcpy_h2d_time: float = 0.0
     compute_time_hw_min: float = 0.0
@@ -69,13 +75,17 @@ class BenchmarkResult:
     total_time: float = 0.0
 
     # Performance metrics
-    gflops_hw: float = 0.0
+    gflops_hw_avg: float = 0.0  # GFLOPS using average time (optimistic)
+    gflops_hw_max: float = 0.0  # GFLOPS using max time (actual throughput!)
+    arithmetic_intensity: float = 0.0  # FLOPS per byte transferred
 
     # Load balancing
     min_nnz_per_pe: int = 0
     max_nnz_per_pe: int = 0
     avg_nnz_per_pe: float = 0.0
     load_imbalance_pct: float = 0.0
+    num_idle_pes: int = 0  # PEs with 0 rows
+    pe_efficiency_pct: float = 100.0  # (active PEs / total PEs) * 100
 
     # Additional metadata
     num_active_pes: int = 0
