@@ -34,6 +34,8 @@ def load_sweep_config(csv_path: str) -> List[Dict[str, str]]:
     - seed: Random seed
     - arch: Architecture ('wse2' or 'wse3')
 
+    Lines starting with '#' are treated as comments and ignored.
+
     Returns:
         List of configuration dictionaries
     """
@@ -45,7 +47,9 @@ def load_sweep_config(csv_path: str) -> List[Dict[str, str]]:
         return []
 
     with open(csv_file, 'r', newline='', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
+        # Filter out comment lines (lines starting with #)
+        lines = [line for line in f if not line.strip().startswith('#')]
+        reader = csv.DictReader(lines)
 
         for i, row in enumerate(reader, 1):
             # Validate required fields
