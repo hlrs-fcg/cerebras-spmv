@@ -30,91 +30,86 @@ class MatchedPairsSpMV:
         
     def distribute_by_nnz(self) -> list:
         """
-        Distribute rows sequentially across PEs to balance NNZ.
-        Simple greedy approach: fill each PE until target is reached.
+        Distribute rows across PEs using histogram-based bucketing.
+        O(n) algorithm that groups rows by NNZ ranges, then distributes round-robin.
+        This achieves much better load balance than sequential greedy.
         """
         target_nnz_per_pe = self.csr_matrix.nnz / self.num_pes
-        
+
         logging.info(f"Distributing {self.csr_matrix.shape[0]} rows over {self.num_pes} PEs...")
         logging.info(f"Target NNZ per PE: {target_nnz_per_pe:.0f}")
-        
-        pe_data = []
-        current_pe_id = 0
-        current_nnz = 0
-        current_rows = []
-        
-        for row in range(self.csr_matrix.shape[0]):
-            row_nnz = self.csr_matrix.indptr[row+1] - self.csr_matrix.indptr[row]
-            
-            current_rows.append(row)
-            current_nnz += row_nnz
-            
-            # Check if we should finalize this PE
-            # Don't finalize if we're on the last PE (let it accumulate all remaining)
-            should_finalize = False
-            
-            if current_pe_id < self.num_pes - 1:
-                # Not the last PE: finalize when we hit target
-                if current_nnz >= target_nnz_per_pe:
-                    should_finalize = True
-            else:
-                # Last PE: only finalize at the very end (handled after loop)
-                pass
-            
-            if should_finalize:
-                # Finalize current PE
-                pe_dict = {
-                    'pe_id': current_pe_id,
-                    'row_ids': current_rows.copy(),
-                    'total_nnz': current_nnz,
-                    'num_rows': len(current_rows)
-                }
-                pe_data.append(pe_dict)
-                
-                logging.debug(f"PE {current_pe_id}: {len(current_rows)} rows, {current_nnz} NNZ")
-                
-                # Move to next PE
-                current_pe_id += 1
-                current_rows = []
-                current_nnz = 0
-        
-        # Finalize the last PE with any remaining rows
-        if current_rows:
-            pe_dict = {
-                'pe_id': current_pe_id,
-                'row_ids': current_rows.copy(),
-                'total_nnz': current_nnz,
-                'num_rows': len(current_rows)
-            }
-            pe_data.append(pe_dict)
-            
-            logging.debug(f"PE {current_pe_id}: {len(current_rows)} rows, {current_nnz} NNZ (final)")
-        
-        # Verify we created all PEs
-        while len(pe_data) < self.num_pes:
-            # Create empty PE if needed
-            pe_data.append({
-                'pe_id': len(pe_data),
-                'row_ids': [],
-                'total_nnz': 0,
-                'num_rows': 0
-            })
-            logging.warning(f"PE {len(pe_data)-1}: empty (no rows assigned)")
-        
-        # Log load balancing quality
+
+        # compute NNZ per row (single pass)
+        row_nnz = np.diff(self.csr_matrix.indptr)
+
+        # create histogram buckets (powers of 2)
+        # buckets: [0-1), [1-2), [2-4), [4-8), ..., [2^k-2^(k+1))
+        if len(row_nnz) == 0:
+            max_nnz = 0
+        else:
+            max_nnz = int(np.max(row_nnz))
+
+        if max_nnz == 0:
+            # all rows empty, just distribute round-robin
+            buckets = {0: list(range(self.csr_matrix.shape[0]))}
+        else:
+            # create buckets
+            num_buckets = int(np.ceil(np.log2(max_nnz + 1))) + 1
+            buckets = {i: [] for i in range(num_buckets)}
+
+            for row in range(len(row_nnz)):
+                nnz = row_nnz[row]
+                if nnz == 0:
+                    bucket_id = 0
+                else:
+                    bucket_id = int(np.floor(np.log2(nnz))) + 1
+                buckets[bucket_id].append(row)
+
+        # initialize PEs
+        pe_data = [{
+            'pe_id': i,
+            'row_ids': [],
+            'total_nnz': 0,
+            'num_rows': 0
+        } for i in range(self.num_pes)]
+
+        # distribute rows round-robin from largest bucket first
+        # this spreads heavy rows across PEs
+        current_pe = 0
+        for bucket_id in reversed(sorted(buckets.keys())):
+            for row in buckets[bucket_id]:
+                nnz = row_nnz[row]
+
+                # assign to current PE
+                pe_data[current_pe]['row_ids'].append(row)
+                pe_data[current_pe]['total_nnz'] += nnz
+                pe_data[current_pe]['num_rows'] += 1
+
+                # round-robin to next PE
+                current_pe = (current_pe + 1) % self.num_pes
+
+        # log load balancing quality
         nnz_counts = [pe['total_nnz'] for pe in pe_data if pe['total_nnz'] > 0]
+        num_active = len(nnz_counts)
+        num_empty = self.num_pes - num_active
+
         if nnz_counts:
             min_nnz = min(nnz_counts)
-            max_nnz = max(nnz_counts)
+            max_nnz_pe = max(nnz_counts)
             avg_nnz = np.mean(nnz_counts)
-            imbalance = (max_nnz - min_nnz) / avg_nnz * 100 if avg_nnz > 0 else 0
-            
+            imbalance = (max_nnz_pe - min_nnz) / avg_nnz * 100 if avg_nnz > 0 else 0
+
             logging.info("Load balancing:")
+            logging.info(f"  Active PEs: {num_active}/{self.num_pes}")
+            if num_empty > 0:
+                logging.warning(f"  ⚠️  {num_empty} empty PEs ({num_empty/self.num_pes*100:.1f}%)")
             logging.info(f"  Min NNZ/PE: {min_nnz}")
-            logging.info(f"  Max NNZ/PE: {max_nnz}")
+            logging.info(f"  Max NNZ/PE: {max_nnz_pe}")
             logging.info(f"  Avg NNZ/PE: {avg_nnz:.1f}")
             logging.info(f"  Imbalance: {imbalance:.1f}%")
-        
+        else:
+            logging.warning(f"All {self.num_pes} PEs are empty!")
+
         return pe_data
     
     def prepare_matched_pairs(self, pe_data: list, vector_x: np.ndarray):
