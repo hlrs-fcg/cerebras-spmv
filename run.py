@@ -216,9 +216,9 @@ Examples:
 
         print_grid_info(width, height, num_pes, fabric_dims, fabric_offsets)
 
-        # Estimate required sizes per PE and check memory
-        # TIME PRECONDITIONING
-        precond_start = time.time()
+        # estimate required sizes per PE and check memory
+        # load balancing and data preparation
+        lb_start = time.time()
         spmv_temp = MatchedPairsSpMV(A, num_pes)
 
         distribute_start = time.time()
@@ -229,9 +229,9 @@ Examples:
         spmv_temp.prepare_matched_pairs(pe_data_temp, x)
         prepare_matched_pairs_time = time.time() - prepare_start
 
-        total_precond_time = time.time() - precond_start
+        total_lb_time = time.time() - lb_start
 
-        logger.info(f"Preconditioning: {total_precond_time*1000:.2f}ms (distribute: {distribute_time*1000:.2f}ms, prepare: {prepare_matched_pairs_time*1000:.2f}ms)")
+        logger.info(f"Load balancing: {total_lb_time*1000:.2f}ms (distribute: {distribute_time*1000:.2f}ms, prepare: {prepare_matched_pairs_time*1000:.2f}ms)")
 
         # Memory feasibility check
         is_feasible, max_memory, offending_pe = check_memory_feasibility(pe_data_temp)
@@ -457,7 +457,7 @@ Examples:
                 memory_utilization_pct=memory_utilization,
                 distribute_time=distribute_time if 'distribute_time' in locals() else 0.0,
                 prepare_matched_pairs_time=prepare_matched_pairs_time if 'prepare_matched_pairs_time' in locals() else 0.0,
-                total_precond_time=total_precond_time if 'total_precond_time' in locals() else 0.0,
+                total_precond_time=total_lb_time if 'total_lb_time' in locals() else 0.0,
                 compile_time=compile_time,
                 memcpy_h2d_time=timing_info.get('memcpy_h2d', 0),
                 compute_time_hw_min=timing_info.get('compute_hw_min', 0),

@@ -133,38 +133,38 @@ Examples:
 
     print_grid_info(width, height, num_pes, fabric_dims, fabric_offsets)
 
-    # distribute data to estimate memory requirements
-    logger.info("Estimating memory requirements...")
+    # perform load balancing to get actual max values per PE
+    logger.info("Performing load balancing across PEs...")
     spmv = MatchedPairsSpMV(A, num_pes)
     pe_data = spmv.distribute_by_nnz()
 
-    # sanity check
+    # check memory (targets 36KB = 75% of 48KB limit)
     is_feasible, max_memory, offending_pe = check_memory_feasibility(pe_data)
     print_memory_analysis(pe_data)
 
     if not is_feasible:
         logger.error("="*60)
-        logger.error("MEMORY LIMIT EXCEEDED!")
+        logger.error("MEMORY TARGET EXCEEDED!")
         logger.error("="*60)
         logger.error(f"PE {offending_pe} requires {max_memory} bytes ({max_memory/1024:.2f} KB)")
-        logger.error("This exceeds the 48 KB (48,000 bytes) limit per PE.")
+        logger.error("This exceeds the 36 KB target (75% of 48KB hardware limit)")
         logger.error("\nSuggestions:")
         logger.error(f"  1. Use --num-pes max for more PEs")
         logger.error(f"  2. Reduce matrix size or density")
         logger.error("="*60)
         return 1
 
-    # calculate compilation parameters with padding
+    # use actual max values from distribution with minimal padding
     max_nnz = max(pe['total_nnz'] for pe in pe_data)
     max_rows = max(pe['num_rows'] for pe in pe_data)
 
-    total_nnz_padded = max(int(max_nnz * 1.2) + 10, 10)
-    max_rows_padded = max_rows + 5
+    total_nnz_padded = max(max_nnz + 5, 10)
+    max_rows_padded = max_rows + 2
 
     logger.info("\nCSL Compilation Parameters:")
     logger.info(f"  PE Grid: {width}×{height}")
-    logger.info(f"  TOTAL_NNZ: {total_nnz_padded} (max actual: {max_nnz})")
-    logger.info(f"  MAX_ROWS: {max_rows_padded} (max actual: {max_rows})")
+    logger.info(f"  TOTAL_NNZ: {total_nnz_padded} (actual: {max_nnz}, padding: +{total_nnz_padded - max_nnz})")
+    logger.info(f"  MAX_ROWS: {max_rows_padded} (actual: {max_rows}, padding: +{max_rows_padded - max_rows})")
 
     # compile CSL
     try:

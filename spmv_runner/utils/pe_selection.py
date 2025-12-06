@@ -10,8 +10,12 @@ from ..core.grid import calculate_pe_grid
 logger = logging.getLogger(__name__)
 
 
-def calculate_min_pes_needed(matrix_nnz: int, matrix_rows: int, max_memory: int = 48_000) -> int:
-    """Calculate minimum number of PEs needed to fit matrix in memory."""
+def calculate_min_pes_needed(matrix_nnz: int, matrix_rows: int, max_memory: int = 36_000) -> int:
+    """Calculate minimum number of PEs needed to fit matrix in memory.
+
+    Default max_memory is 36KB (75% of 48KB limit) to provide safety margin
+    for compiler overhead and load balancing variations.
+    """
     for num_pes in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]:
         rows_per_pe = matrix_rows / num_pes
         nnz_per_pe = matrix_nnz / num_pes
@@ -77,7 +81,7 @@ def suggest_pe_counts(matrix_nnz: int, matrix_rows: int,
             rows_per_pe = matrix_rows / n
             nnz_per_pe = matrix_nnz / n
             memory_per_pe = calculate_memory_per_pe(int(rows_per_pe), int(nnz_per_pe))
-            memory_pct = (memory_per_pe / 48_000) * 100
+            memory_pct = (memory_per_pe / 36_000) * 100  # Show % of target (75% of 48KB)
 
             # Calculate grid
             try:

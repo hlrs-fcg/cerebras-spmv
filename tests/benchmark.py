@@ -54,10 +54,10 @@ class BenchmarkResult:
     avg_memory_per_pe: float = 0.0
     memory_utilization_pct: float = 0.0
 
-    # Preconditioning timing (seconds)
-    distribute_time: float = 0.0  # Row distribution algorithm time
-    prepare_matched_pairs_time: float = 0.0  # Matched pairs transformation time
-    total_precond_time: float = 0.0  # Total CPU preprocessing time
+    # load balancing timing (seconds)
+    distribute_time: float = 0.0  # row distribution algorithm time
+    prepare_matched_pairs_time: float = 0.0  # matched pairs transformation time
+    total_precond_time: float = 0.0  # total load balancing time (kept as precond for CSV compatibility)
 
     # Device timing (seconds)
     compile_time: float = 0.0

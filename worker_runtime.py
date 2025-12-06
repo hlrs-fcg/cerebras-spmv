@@ -94,9 +94,9 @@ def main():
         logger.error(f"Matrix generation failed: {e}")
         return 1
 
-    # Distribute data across PEs
+    # distribute data across PEs
     logger.info(f"Distributing data across {args.num_pes} PEs...")
-    precond_start = time.time()
+    lb_start = time.time()
     spmv = MatchedPairsSpMV(A, args.num_pes)
 
     distribute_start = time.time()
@@ -107,8 +107,8 @@ def main():
     spmv.prepare_matched_pairs(pe_data, x)
     prepare_matched_pairs_time = time.time() - prepare_start
 
-    total_precond_time = time.time() - precond_start
-    logger.info(f"Preconditioning: {total_precond_time*1000:.2f}ms")
+    total_lb_time = time.time() - lb_start
+    logger.info(f"Load balancing: {total_lb_time*1000:.2f}ms")
 
     # count active PEs
     num_active = sum(1 for pe in pe_data if pe['num_rows'] > 0)
@@ -331,8 +331,8 @@ def main():
             memory_utilization_pct=memory_utilization,
             distribute_time=distribute_time,
             prepare_matched_pairs_time=prepare_matched_pairs_time,
-            total_precond_time=total_precond_time,
-            compile_time=0.0,  # Compilation happened on login node
+            total_precond_time=total_lb_time,
+            compile_time=0.0,  # compilation happened on login node
             memcpy_h2d_time=memcpy_h2d_time,
             compute_time_hw_min=min_time_s,
             compute_time_hw_avg=avg_time_s,
