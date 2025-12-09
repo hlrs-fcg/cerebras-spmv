@@ -13,12 +13,14 @@ import time
 from pathlib import Path
 
 import numpy as np
-from cerebras.sdk.client import SdkRuntime
-from cerebras.sdk.client.sdk_utils import calculate_cycles
-from cerebras.appliance.pb.sdk.sdk_common_pb2 import MemcpyDataType, MemcpyOrder
+from cerebras.sdk.runtime.sdkruntimepybind import SdkRuntime, MemcpyDataType, MemcpyOrder
+from cerebras.sdk.sdk_utils import calculate_cycles
 
 from spmv_prototype import generate_random_sparse_matrix, MatchedPairsSpMV, validate_results
-from tests.benchmark import BenchmarkResult, save_benchmark
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent / 'tests'))
+from benchmark import BenchmarkResult, save_benchmark
 
 logging.basicConfig(
     level=logging.INFO,

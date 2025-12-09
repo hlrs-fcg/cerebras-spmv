@@ -144,6 +144,7 @@ Examples:
             launcher.stage("worker_runtime.py")
             launcher.stage("spmv_prototype.py")
             launcher.stage("spmv_runner")  # stage entire package
+            launcher.stage("tests/__init__.py")
             launcher.stage("tests/benchmark.py")
 
             logger.info("Executing on worker node...")
