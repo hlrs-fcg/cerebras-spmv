@@ -13,8 +13,9 @@ import time
 from pathlib import Path
 
 import numpy as np
-from cerebras.sdk.runtime.sdkruntimepybind import SdkRuntime, MemcpyDataType, MemcpyOrder
-from cerebras.sdk.runtime.sdkruntimepybind import calculate_cycles
+from cerebras.sdk.client import SdkRuntime
+from cerebras.sdk.client.sdk_utils import calculate_cycles
+from cerebras.appliance.pb.sdk.sdk_common_pb2 import MemcpyDataType, MemcpyOrder
 
 from spmv_prototype import generate_random_sparse_matrix, MatchedPairsSpMV, validate_results
 from tests.benchmark import BenchmarkResult, save_benchmark
