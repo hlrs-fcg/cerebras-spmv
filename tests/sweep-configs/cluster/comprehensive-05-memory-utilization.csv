@@ -1,0 +1,11 @@
+rows,cols,density,num_pes,seed,arch,comment
+10000,10000,0.006094,512,42,wse3,"Memory util target: 20%, 512 PEs"
+10000,10000,0.012238,512,42,wse3,"Memory util target: 40%, 512 PEs"
+10000,10000,0.018382,512,42,wse3,"Memory util target: 60%, 512 PEs"
+10000,10000,0.024526,512,42,wse3,"Memory util target: 80%, 512 PEs"
+10000,10000,0.029134,512,42,wse3,"Memory util target: 95%, 512 PEs"
+50000,50000,0.00097304,2048,42,wse3,"Memory util target: 20%, 2048 PEs"
+50000,50000,0.00195608,2048,42,wse3,"Memory util target: 40%, 2048 PEs"
+50000,50000,0.00293912,2048,42,wse3,"Memory util target: 60%, 2048 PEs"
+50000,50000,0.00392216,2048,42,wse3,"Memory util target: 80%, 2048 PEs"
+50000,50000,0.00465944,2048,42,wse3,"Memory util target: 95%, 2048 PEs"
