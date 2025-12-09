@@ -29,6 +29,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class SdkRuntimeWrapper:
+    """Context manager wrapper for SdkRuntime that doesn't natively support 'with' statement."""
+
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+        self.runner = None
+
+    def __enter__(self):
+        self.runner = SdkRuntime(*self.args, **self.kwargs)
+        return self.runner
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.runner is not None:
+            try:
+                self.runner.stop()
+            except Exception as e:
+                logger.warning(f"Error stopping SdkRuntime: {e}")
+        return False  # Don't suppress exceptions
+
+
 def get_git_commit_hash() -> str:
     """Get last commit hash for later reference of the program state"""
     try:
@@ -120,7 +141,7 @@ def main():
     # Execute on device using SdkRuntime with cmaddr
     logger.info("Connecting to Cerebras system...")
     try:
-        with SdkRuntime(args.name, cmaddr=args.cmaddr) as runner:
+        with SdkRuntimeWrapper(args.name, cmaddr=args.cmaddr) as runner:
             # Get symbol IDs
             sym_num_rows = runner.get_id("num_rows")
             sym_row_offsets = runner.get_id("row_offsets")
