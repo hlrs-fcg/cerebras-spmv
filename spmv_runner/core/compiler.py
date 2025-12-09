@@ -56,16 +56,17 @@ def compile_csl(
         logger.error("Compilation failed! No artifact was generated!")
         raise RuntimeError("CSL compilation failed")
 
+    # Ensure all values are Python native types for JSON serialization
     artifact_data = {
         "artifact_id": artifact_id,
-        "fabric_dims": list(fabric_dims),
+        "fabric_dims": [int(fabric_dims[0]), int(fabric_dims[1])],
         "params": {
-            "width": width,
-            "height": height,
-            "TOTAL_NNZ": total_nnz_per_pe,
-            "MAX_ROWS": max_rows_per_pe,
+            "width": int(width),
+            "height": int(height),
+            "TOTAL_NNZ": int(total_nnz_per_pe),
+            "MAX_ROWS": int(max_rows_per_pe),
         },
-        "compile_time_seconds": compile_time
+        "compile_time_seconds": float(compile_time)
     }
 
     artifact_file = Path(artifact_path)

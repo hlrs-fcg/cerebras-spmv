@@ -193,14 +193,15 @@ Examples:
         artifact_data = json.load(f)
 
     # add matrix configuration for reference
+    # Convert numpy types to Python native types for JSON serialization
     artifact_data['matrix_config'] = {
-        'rows': args.rows,
-        'cols': args.cols,
-        'density': args.density,
-        'seed': args.seed,
+        'rows': int(args.rows),
+        'cols': int(args.cols),
+        'density': float(args.density),
+        'seed': int(args.seed),
         'nnz': int(A.nnz)
     }
-    artifact_data['num_pes'] = num_pes
+    artifact_data['num_pes'] = int(num_pes)
 
     # save enhanced metadata
     with open(args.artifact_path, 'w', encoding='utf8') as f:
