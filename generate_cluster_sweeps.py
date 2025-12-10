@@ -385,46 +385,44 @@ Examples:
         output_file = output_dir / 'large-scale-auto-pe.csv'
 
     elif args.sweep_type == 'comprehensive':
-        print("Generating comprehensive benchmark suite...")
+        print("Generating comprehensive benchmark suite (capped at ~20 runs each)...")
 
-        # 1. Density sweeps at multiple scales
-        for size in [10000, 50000, 100000]:
-            for num_pes in [512, 2048, 8192]:
-                if num_pes <= size:  # Don't exceed row count
-                    configs.extend(generate_density_sweep(size, size, num_pes, num_points=30))
-        save_sweep_config(configs, output_dir / 'comprehensive-01-density-sweeps.csv')
+        # 1. Density sweep - 20 points, one representative config
+        configs.extend(generate_density_sweep(10000, 10000, 512, num_points=20))
+        save_sweep_config(configs, output_dir / 'comprehensive-01-density-sweep.csv')
         configs = []
 
-        # 2. Strong scaling studies
-        for size in [10000, 50000, 100000]:
-            for density in [0.001, 0.01, 0.05]:
-                configs.extend(generate_pe_scaling_sweep(size, size, density))
+        # 2. Strong scaling - 12 PE counts, one config
+        configs.extend(generate_pe_scaling_sweep(10000, 10000, 0.01))
         save_sweep_config(configs, output_dir / 'comprehensive-02-strong-scaling.csv')
         configs = []
 
-        # 3. Weak scaling
+        # 3. Weak scaling - 12 runs
         configs.extend(generate_weak_scaling_sweep(base_nnz_per_pe=2000))
         save_sweep_config(configs, output_dir / 'comprehensive-03-weak-scaling.csv')
         configs = []
 
-        # 4. Constant NNZ (arithmetic intensity)
-        for nnz in [100000, 1000000, 10000000]:
-            configs.extend(generate_constant_nnz_sweep(nnz, num_pes=2048, num_points=15))
+        # 4. Constant NNZ - 20 points, one NNZ target
+        configs.extend(generate_constant_nnz_sweep(1000000, num_pes=2048, num_points=20))
         save_sweep_config(configs, output_dir / 'comprehensive-04-arithmetic-intensity.csv')
         configs = []
 
-        # 5. Memory utilization study
+        # 5. Memory utilization - 5 targets, 2 sizes = 10 runs
         configs.extend(generate_memory_utilization_sweep(10000, 10000, num_pes=512))
         configs.extend(generate_memory_utilization_sweep(50000, 50000, num_pes=2048))
         save_sweep_config(configs, output_dir / 'comprehensive-05-memory-utilization.csv')
         configs = []
 
-        # 6. Load balancing analysis
-        configs.extend(generate_load_balance_study(10000))
-        configs.extend(generate_load_balance_study(50000))
+        # 6. Load balancing - reduced to 20 runs (4 PE counts × 5 densities)
+        configs.extend(generate_load_balance_study(
+            10000,
+            num_pes_list=[64, 256, 1024, 4096],
+            densities=[0.001, 0.005, 0.01, 0.05, 0.1]
+        ))
         save_sweep_config(configs, output_dir / 'comprehensive-06-load-balance.csv')
 
         print("\n✓ Comprehensive suite generated!")
+        print(f"Total: ~102 runs (6 sweeps × ~17 avg)")
         return
 
     if configs:
