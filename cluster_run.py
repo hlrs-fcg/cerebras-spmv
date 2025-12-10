@@ -159,14 +159,43 @@ Examples:
             download_path = args.download_benchmark if args.download_benchmark else 'tests/benchmark_results.csv'
             download_path_resolved = str(script_dir / download_path) if not Path(download_path).is_absolute() else download_path
 
-            logger.info(f"\nDownloading benchmark results to: {download_path_resolved}")
+            logger.info(f"\nDownloading benchmark results...")
             try:
                 # ensure parent directory exists
                 Path(download_path_resolved).parent.mkdir(parents=True, exist_ok=True)
 
-                # download from worker node
-                launcher.download_artifact("benchmark_results.csv", download_path_resolved)
-                logger.info("✓ Benchmark results downloaded successfully")
+                # Download to temporary file first (worker has only one entry)
+                import tempfile
+                with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.csv') as tmp:
+                    tmp_path = tmp.name
+
+                launcher.download_artifact("benchmark_results.csv", tmp_path)
+
+                # Append downloaded results to main CSV
+                import csv
+                with open(tmp_path, 'r') as tmp_f:
+                    reader = csv.DictReader(tmp_f)
+                    rows = list(reader)
+
+                    if rows:
+                        # Check if main file exists
+                        main_exists = Path(download_path_resolved).exists()
+
+                        with open(download_path_resolved, 'a' if main_exists else 'w', newline='') as main_f:
+                            writer = csv.DictWriter(main_f, fieldnames=reader.fieldnames)
+
+                            if not main_exists:
+                                writer.writeheader()
+
+                            writer.writerows(rows)
+
+                        logger.info(f"✓ Appended {len(rows)} benchmark(s) to {download_path_resolved}")
+                    else:
+                        logger.warning("Downloaded CSV has no data rows")
+
+                # Clean up temp file
+                Path(tmp_path).unlink()
+
             except Exception as e:
                 logger.warning(f"Failed to download benchmark results: {e}")
                 logger.warning("This may be normal if the run failed or benchmarking was disabled")
