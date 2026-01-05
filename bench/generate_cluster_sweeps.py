@@ -318,7 +318,7 @@ Examples:
     parser.add_argument('--cols', type=int, default=10000, help='Matrix columns')
     parser.add_argument('--density', type=float, default=0.01, help='Sparsity density')
     parser.add_argument('--num-pes', type=int, default=512, help='Number of PEs')
-    parser.add_argument('--output-dir', type=str, default='tests/sweep-configs/cluster',
+    parser.add_argument('--output-dir', type=str, default='bench/configs/cluster',
                        help='Output directory for sweep configs')
 
     # Sweep-specific parameters

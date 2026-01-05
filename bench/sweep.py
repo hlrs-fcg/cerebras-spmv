@@ -180,14 +180,14 @@ Example CSV format (sweep_config.csv):
     5000,5000,0.001,16,44,wse3
 
 Usage:
-    python tests/sweep.py sweep_config.csv
-    python tests/sweep.py sweep_config.csv --results sweep_results.csv
+    python bench/sweep.py sweep_config.csv
+    python bench/sweep.py sweep_config.csv --results sweep_results.csv
         """
     )
 
     parser.add_argument('config', type=str,
                        help='Path to CSV file with parameter configurations')
-    parser.add_argument('--results', type=str, default='tests/benchmark_results.csv',
+    parser.add_argument('--results', type=str, default='results/data/benchmark_results.csv',
                        help='Path to save benchmark results CSV')
     parser.add_argument('--run-script', type=str, default='run.py',
                        help='Path to run.py script')

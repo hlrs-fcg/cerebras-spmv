@@ -17,10 +17,7 @@ from cerebras.sdk.runtime.sdkruntimepybind import SdkRuntime, MemcpyDataType, Me
 from cerebras.sdk.sdk_utils import calculate_cycles
 
 from spmv_prototype import generate_random_sparse_matrix, MatchedPairsSpMV, validate_results
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent / 'tests'))
-from benchmark import BenchmarkResult, save_benchmark
+from bench import BenchmarkResult, save_benchmark
 
 logging.basicConfig(
     level=logging.INFO,

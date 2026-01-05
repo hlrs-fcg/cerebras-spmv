@@ -42,13 +42,13 @@ def main():
         epilog="""
 Examples:
   # Auto-calculate minimum PEs needed
-  python cluster_compile.py --rows 1000 --cols 1000 --density 0.01 --num-pes min
+  python cluster/compile.py --rows 1000 --cols 1000 --density 0.01 --num-pes min
 
   # Specific number of PEs
-  python cluster_compile.py --rows 1000 --cols 1000 --density 0.01 --num-pes 16
+  python cluster/compile.py --rows 1000 --cols 1000 --density 0.01 --num-pes 16
 
   # Custom output paths
-  python cluster_compile.py --rows 500 --cols 500 --density 0.05 \\
+  python cluster/compile.py --rows 500 --cols 500 --density 0.05 \\
       --num-pes max --artifact-path my_artifact.json --out-path my_out
         """
     )
@@ -209,7 +209,7 @@ Examples:
 
     logger.info("\n" + "="*60)
     logger.info("Next steps:")
-    logger.info("  1. Run: python cluster_run.py")
+    logger.info("  1. Run: python cluster/run.py")
     logger.info(f"     (will use artifact from {args.artifact_path})")
     logger.info("="*60)
 

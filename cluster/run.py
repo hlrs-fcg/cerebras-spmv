@@ -28,25 +28,25 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Use artifact from cluster_compile.py
-  python cluster_run.py
+  # Use artifact from cluster/compile.py
+  python cluster/run.py
 
   # Use custom artifact path
-  python cluster_run.py --artifact-path my_artifact.json
+  python cluster/run.py --artifact-path my_artifact.json
 
   # Run in simulator mode (for testing)
-  python cluster_run.py --simulator
+  python cluster/run.py --simulator
 
   # Download benchmark results to custom location
-  python cluster_run.py --download-benchmark results/my_benchmark.csv
+  python cluster/run.py --download-benchmark results/my_benchmark.csv
         """
     )
     parser.add_argument('--artifact-path', type=str, default='artifact_path.json',
-                       help='Path to artifact metadata JSON from cluster_compile.py (default: artifact_path.json)')
+                       help='Path to artifact metadata JSON from cluster/compile.py (default: artifact_path.json)')
     parser.add_argument('--simulator', action='store_true',
                        help='Run in simulator mode instead of real hardware')
     parser.add_argument('--download-benchmark', type=str, default='',
-                       help='Local path to download benchmark CSV (if empty, will use tests/benchmark_results.csv)')
+                       help='Local path to download benchmark CSV (if empty, will use results/data/benchmark_results.csv)')
     parser.add_argument('--verbose', '-v', action='store_true',
                        help='Enable verbose output')
     args = parser.parse_args()
@@ -113,7 +113,7 @@ Examples:
     # construct worker_runtime.py command
     # NOTE: Use %CMADDR% template variable - SdkLauncher will substitute it at runtime
     worker_cmd = (
-        f"python worker_runtime.py "
+        f"python cluster/worker_runtime.py "
         f"--name out "  # should match the out directory from compilation
         f"--cmaddr %CMADDR% "
         f"--rows {matrix_config['rows']} "
@@ -141,11 +141,11 @@ Examples:
         ) as launcher:
             # stage worker_runtime.py and dependencies
             logger.info("Staging worker_runtime.py...")
-            launcher.stage("worker_runtime.py")
-            launcher.stage("spmv_prototype.py")
-            launcher.stage("spmv_runner")  # stage entire package
-            launcher.stage("tests/__init__.py")
-            launcher.stage("tests/benchmark.py")
+            launcher.stage("cluster/worker_runtime.py")
+            launcher.stage("src/spmv_prototype.py")
+            launcher.stage("src/spmv_runner")  # stage entire package
+            launcher.stage("bench/__init__.py")
+            launcher.stage("bench/benchmark.py")
 
             logger.info("Executing on worker node...")
             response = launcher.run(worker_cmd)
@@ -156,7 +156,7 @@ Examples:
             print(response)
             logger.info("="*60)
 
-            download_path = args.download_benchmark if args.download_benchmark else 'tests/benchmark_results.csv'
+            download_path = args.download_benchmark if args.download_benchmark else 'results/data/benchmark_results.csv'
             download_path_resolved = str(script_dir / download_path) if not Path(download_path).is_absolute() else download_path
 
             logger.info(f"\nDownloading benchmark results...")

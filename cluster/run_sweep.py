@@ -57,10 +57,10 @@ def read_sweep_config(config_path: str) -> List[Dict]:
 
 
 def run_cluster_compile(config: Dict, artifact_path: str, out_path: str) -> bool:
-    """Run cluster_compile.py for given configuration."""
+    """Run cluster/compile.py for given configuration."""
     cmd = [
         sys.executable,
-        'cluster_compile.py',
+        'cluster/compile.py',
         '--rows', str(config['rows']),
         '--cols', str(config['cols']),
         '--density', str(config['density']),
@@ -104,10 +104,10 @@ def run_cluster_execution(
     benchmark_csv: str,
     simulator: bool = False
 ) -> bool:
-    """Run cluster_run.py to execute on cluster."""
+    """Run cluster/run.py to execute on cluster."""
     cmd = [
         sys.executable,
-        'cluster_run.py',
+        'cluster/run.py',
         '--artifact-path', artifact_path,
         '--download-benchmark', benchmark_csv
     ]
@@ -275,19 +275,19 @@ def main():
         epilog="""
 Examples:
   # Run complete sweep
-  python run_cluster_sweep.py sweep-configs/cluster/density-sweep.csv
+  python cluster/run_sweep.py bench/configs/cluster/density-sweep.csv
 
   # Resume from specific index
-  python run_cluster_sweep.py sweep-configs/cluster/pe-scaling.csv --start-index 10
+  python cluster/run_sweep.py bench/configs/cluster/pe-scaling.csv --start-index 10
 
   # Run only 5 configurations
-  python run_cluster_sweep.py sweep-configs/cluster/test.csv --max-runs 5
+  python cluster/run_sweep.py bench/configs/cluster/test.csv --max-runs 5
 
   # Test in simulator mode
-  python run_cluster_sweep.py sweep-configs/cluster/small-test.csv --simulator
+  python cluster/run_sweep.py bench/configs/cluster/small-test.csv --simulator
 
   # Use custom output location
-  python run_cluster_sweep.py sweep-configs/cluster/my-sweep.csv \\
+  python cluster/run_sweep.py bench/configs/cluster/my-sweep.csv \\
       --output results/experiment1.csv \\
       --work-dir work/experiment1
         """
@@ -295,8 +295,8 @@ Examples:
 
     parser.add_argument('config',
                        help='Path to sweep configuration CSV')
-    parser.add_argument('--output', type=str, default='tests/benchmark_results.csv',
-                       help='Output benchmark CSV (default: tests/benchmark_results.csv)')
+    parser.add_argument('--output', type=str, default='results/data/benchmark_results.csv',
+                       help='Output benchmark CSV (default: results/data/benchmark_results.csv)')
     parser.add_argument('--work-dir', type=str, default='sweep_work',
                        help='Working directory for artifacts (default: sweep_work)')
     parser.add_argument('--simulator', action='store_true',
