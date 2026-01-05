@@ -385,44 +385,62 @@ Examples:
         output_file = output_dir / 'large-scale-auto-pe.csv'
 
     elif args.sweep_type == 'comprehensive':
-        print("Generating comprehensive benchmark suite (capped at ~20 runs each)...")
+        print("="*70)
+        print("Generating comprehensive benchmark suite up to 2^19 PEs (524,288)")
+        print("="*70)
+        print()
 
-        # 1. Density sweep - 20 points, one representative config
-        configs.extend(generate_density_sweep(10000, 10000, 512, num_points=20))
+        # 1. Density sweep - 20 points, high PE count
+        print("1. Density sweep: 100k×100k matrix, 262,144 PEs")
+        configs.extend(generate_density_sweep(100000, 100000, 262144,
+                                               density_min=0.0001, density_max=0.01, num_points=20))
         save_sweep_config(configs, output_dir / 'comprehensive-01-density-sweep.csv')
         configs = []
 
-        # 2. Strong scaling - 12 PE counts, one config
-        configs.extend(generate_pe_scaling_sweep(10000, 10000, 0.01))
+        # 2. Strong scaling - up to 2^19 (524,288) PEs
+        print("2. Strong scaling: 200k×200k, density=0.01, 256 → 524,288 PEs")
+        configs.extend(generate_pe_scaling_sweep(200000, 200000, 0.01,
+                                                  pe_start=256, pe_end=524288))
         save_sweep_config(configs, output_dir / 'comprehensive-02-strong-scaling.csv')
         configs = []
 
-        # 3. Weak scaling - 12 runs
-        configs.extend(generate_weak_scaling_sweep(base_nnz_per_pe=2000))
+        # 3. Weak scaling - up to 2^19 (524,288) PEs
+        print("3. Weak scaling: 1000 NNZ/PE, 256 → 524,288 PEs")
+        configs.extend(generate_weak_scaling_sweep(base_nnz_per_pe=1000,
+                                                    pe_start=256, pe_end=524288))
         save_sweep_config(configs, output_dir / 'comprehensive-03-weak-scaling.csv')
         configs = []
 
-        # 4. Constant NNZ - 20 points, one NNZ target
-        configs.extend(generate_constant_nnz_sweep(1000000, num_pes=2048, num_points=20))
+        # 4. Constant NNZ - with high PE count
+        print("4. Arithmetic intensity: 10M NNZ, 65,536 PEs")
+        configs.extend(generate_constant_nnz_sweep(10000000, num_pes=65536, num_points=20))
         save_sweep_config(configs, output_dir / 'comprehensive-04-arithmetic-intensity.csv')
         configs = []
 
-        # 5. Memory utilization - 5 targets, 2 sizes = 10 runs
-        configs.extend(generate_memory_utilization_sweep(10000, 10000, num_pes=512))
-        configs.extend(generate_memory_utilization_sweep(50000, 50000, num_pes=2048))
+        # 5. Memory utilization - at high PE count
+        print("5. Memory utilization: 100k and 200k matrices, 131,072 PEs")
+        configs.extend(generate_memory_utilization_sweep(100000, 100000, num_pes=131072))
+        configs.extend(generate_memory_utilization_sweep(200000, 200000, num_pes=131072))
         save_sweep_config(configs, output_dir / 'comprehensive-05-memory-utilization.csv')
         configs = []
 
-        # 6. Load balancing - reduced to 20 runs (4 PE counts × 5 densities)
+        # 6. Load balancing - up to 2^19 (524,288) PEs
+        print("6. Load balance: 100k×100k, up to 524,288 PEs")
         configs.extend(generate_load_balance_study(
-            10000,
-            num_pes_list=[64, 256, 1024, 4096],
-            densities=[0.001, 0.005, 0.01, 0.05, 0.1]
+            100000,
+            num_pes_list=[4096, 16384, 65536, 262144, 524288],
+            densities=[0.0001, 0.001, 0.01]
         ))
         save_sweep_config(configs, output_dir / 'comprehensive-06-load-balance.csv')
 
-        print("\n✓ Comprehensive suite generated!")
-        print(f"Total: ~102 runs (6 sweeps × ~17 avg)")
+        print()
+        print("="*70)
+        print("✓ Comprehensive suite generated!")
+        print("="*70)
+        total_runs = 20 + 12 + 12 + 20 + 10 + 15
+        print(f"Total runs: ~{total_runs}")
+        print(f"Max PEs: 524,288 (2^19)")
+        print()
         return
 
     if configs:
