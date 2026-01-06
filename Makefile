@@ -1,5 +1,6 @@
 DATE := $(shell date -I)
-PYTHON := python
+#PYTHON := python
+PYTHON := uv run
 
 .PHONY: help bench bench-save clean cluster-run cluster-compile
 
