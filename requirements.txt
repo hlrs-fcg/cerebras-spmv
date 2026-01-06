@@ -1,5 +1,7 @@
 matplotlib
 pandas
+fast-matrix-market
+ssgetpy
 cerebras-appliance==2.5.0
 cerebras-sdk==2.5.0
 dill==0.4.0
