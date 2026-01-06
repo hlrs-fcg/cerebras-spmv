@@ -11,6 +11,7 @@ import csv
 import subprocess
 import sys
 import logging
+import datetime
 from pathlib import Path
 from typing import List, Dict, Tuple
 from collections import defaultdict
@@ -185,8 +186,9 @@ Usage:
         """
     )
 
-    parser.add_argument('config', type=str,
+    parser.add_argument('config', type=str, action='store_true',
                        help='Path to CSV file with parameter configurations')
+    default_path = f"{datetime.date()}_{config}"
     parser.add_argument('--results', type=str, default='results/data/benchmark_results.csv',
                        help='Path to save benchmark results CSV')
     parser.add_argument('--run-script', type=str, default='run.py',

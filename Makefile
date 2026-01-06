@@ -5,7 +5,7 @@ PYTHON := python
 
 help:
 	@echo "Available targets:"
-	@echo "  make bench SWEEP=name              Run benchmark sweep"
+	@echo "  make bench SWEEP=name              Run benchmark sweep in bench/configs/"
 	@echo "  make bench-save SWEEP=name         Run and save with date prefix"
 	@echo "  make cluster-compile ROWS=N COLS=N DENSITY=D   Compile for cluster"
 	@echo "  make cluster-run                   Run on cluster (after compile)"
