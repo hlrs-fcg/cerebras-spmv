@@ -1,7 +1,22 @@
 DATE := $(shell date -I)
 PYTHON := python
 
-.PHONY: bench bench-save clean help cluster-run cluster-compile
+.PHONY: help bench bench-save clean cluster-run cluster-compile
+
+help:
+	@echo "Available targets:"
+	@echo "  make bench SWEEP=name              Run benchmark sweep"
+	@echo "  make bench-save SWEEP=name         Run and save with date prefix"
+	@echo "  make cluster-compile ROWS=N COLS=N DENSITY=D   Compile for cluster"
+	@echo "  make cluster-run                   Run on cluster (after compile)"
+	@echo "  make cluster-sweep CONFIG=path     Run sweep on cluster"
+	@echo "  make clean                         Remove __pycache__"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make bench SWEEP=density-sweep"
+	@echo "  make bench-save SWEEP=strong-scaling"
+	@echo "  make cluster-compile ROWS=10000 COLS=10000 DENSITY=0.01"
+	@echo "  make cluster-sweep CONFIG=bench/configs/cluster/comprehensive-01.csv"
 
 # Run a sweep: make bench SWEEP=density-sweep
 bench:
@@ -46,18 +61,3 @@ endif
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
-
-help:
-	@echo "Available targets:"
-	@echo "  make bench SWEEP=name              Run benchmark sweep"
-	@echo "  make bench-save SWEEP=name         Run and save with date prefix"
-	@echo "  make cluster-compile ROWS=N COLS=N DENSITY=D   Compile for cluster"
-	@echo "  make cluster-run                   Run on cluster (after compile)"
-	@echo "  make cluster-sweep CONFIG=path     Run sweep on cluster"
-	@echo "  make clean                         Remove __pycache__"
-	@echo ""
-	@echo "Examples:"
-	@echo "  make bench SWEEP=density-sweep"
-	@echo "  make bench-save SWEEP=strong-scaling"
-	@echo "  make cluster-compile ROWS=10000 COLS=10000 DENSITY=0.01"
-	@echo "  make cluster-sweep CONFIG=bench/configs/cluster/comprehensive-01.csv"
