@@ -186,7 +186,7 @@ Usage:
         """
     )
 
-    parser.add_argument('config', type=str, action='store_true',
+    parser.add_argument('--config', type=str, action='store_true',
                        help='Path to CSV file with parameter configurations')
     default_path = f"{datetime.date()}_{config}"
     parser.add_argument('--results', type=str, default='results/data/benchmark_results.csv',
