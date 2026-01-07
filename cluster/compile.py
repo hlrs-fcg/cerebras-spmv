@@ -63,9 +63,6 @@ Examples:
                        help='Path to save artifact metadata JSON (default: artifact_path.json)')
     parser.add_argument('--out-path', type=str, default='out',
                        help='Compilation output directory (default: out)')
-    parser.add_argument('--arch', type=str, default='wse3',
-                       choices=['wse2', 'wse3'],
-                       help='Target architecture (default: wse3)')
     parser.add_argument('--verbose', '-v', action='store_true',
                        help='Enable verbose debug output')
     args = parser.parse_args()
@@ -84,13 +81,8 @@ Examples:
     logger.info("Cluster Compilation - Login Node")
     logger.info("="*60)
 
-    # fabric constraints
-    if args.arch == 'wse3':
-        fabric_dims = (762, 1172)
-        fabric_offsets = (4, 1)
-    else:  # wse2
-        fabric_dims = (757, 996)
-        fabric_offsets = (4, 1)
+    fabric_dims = (762, 1172)
+    fabric_offsets = (4, 1)
 
     max_width = fabric_dims[0] - fabric_offsets[0]
     max_height = fabric_dims[1] - fabric_offsets[1]
@@ -174,7 +166,6 @@ Examples:
             height=height,
             total_nnz_per_pe=total_nnz_padded,
             max_rows_per_pe=max_rows_padded,
-            arch=args.arch,
             fabric_dims=fabric_dims,
             fabric_offsets=fabric_offsets,
             artifact_path=args.artifact_path,

@@ -195,7 +195,7 @@ Usage:
                        help='Path to run.py script')
     parser.add_argument('--continue-on-error', action='store_true',
                        help='Continue sweep even if individual runs fail')
-    parser.add_argument('--verbose', action='store_true',
+    parser.add_argument('--verbose', action='store_true', default=True,
                        help='Show detailed output from each run')
 
     args = parser.parse_args()
