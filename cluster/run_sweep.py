@@ -293,7 +293,7 @@ Examples:
         """
     )
 
-    parser.add_argument('config',
+    parser.add_argument('--config',
                        help='Path to sweep configuration CSV')
     parser.add_argument('--output', type=str, default='results/data/benchmark_results.csv',
                        help='Output benchmark CSV (default: results/data/benchmark_results.csv)')
