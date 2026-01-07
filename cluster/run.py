@@ -88,7 +88,8 @@ Examples:
     num_pes = artifact_data.get('num_pes')
 
     # validate required fields
-    required_matrix_fields = ['rows', 'cols', 'density', 'seed']
+    matrix_source = matrix_config.get('source', 'random')
+    required_matrix_fields = ['rows', 'cols', 'nnz']
     missing_fields = [f for f in required_matrix_fields if f not in matrix_config]
     if missing_fields:
         logger.error(f"Missing matrix config fields: {missing_fields}")
@@ -105,7 +106,7 @@ Examples:
         return 1
 
     logger.info(f"Artifact ID: {artifact_id}")
-    logger.info(f"Matrix: {matrix_config['rows']}×{matrix_config['cols']}, density={matrix_config['density']}")
+    logger.info(f"Matrix: {matrix_config['rows']}×{matrix_config['cols']}, NNZ={matrix_config['nnz']:,} (source: {matrix_source})")
     logger.info(f"PEs: {num_pes}, Grid: {params['width']}×{params['height']}")
 
     arch = 'wse3'  # default, could be stored in compiled artifact
@@ -118,14 +119,18 @@ Examples:
         f"--cmaddr %CMADDR% "
         f"--rows {matrix_config['rows']} "
         f"--cols {matrix_config['cols']} "
-        f"--density {matrix_config['density']} "
-        f"--seed {matrix_config['seed']} "
         f"--num-pes {num_pes} "
         f"--grid-width {params['width']} "
         f"--grid-height {params['height']} "
         f"--arch {arch} "
         f"--save-benchmark benchmark_results.csv"
     )
+
+    # Add matrix source-specific parameters
+    if matrix_source == 'random':
+        worker_cmd += f" --density {matrix_config['density']} --seed {matrix_config['seed']}"
+    elif matrix_source in ['mtx_file', 'suitesparse']:
+        worker_cmd += f" --mtx-file {matrix_config['mtx_file']}"
 
     if args.verbose:
         worker_cmd += " --verbose"
@@ -146,6 +151,12 @@ Examples:
             launcher.stage("src/spmv_runner")  # stage entire package
             launcher.stage("bench/__init__.py")
             launcher.stage("bench/benchmark.py")
+
+            # stage MTX file if needed
+            if matrix_source in ['mtx_file', 'suitesparse']:
+                mtx_file = matrix_config['mtx_file']
+                logger.info(f"Staging MTX file: {mtx_file}")
+                launcher.stage(mtx_file)
 
             logger.info("Executing on worker node...")
             response = launcher.run(worker_cmd)

@@ -32,6 +32,43 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def load_matrix_market(mtx_path):
+    """Load matrix from MatrixMarket file using fast-matrix-market."""
+    try:
+        import fast_matrix_market as fmm
+    except ImportError:
+        logger.error("fast-matrix-market not installed. Run: pip install fast-matrix-market")
+        raise
+
+    logger.info(f"Loading MatrixMarket file: {mtx_path}")
+    A = fmm.mmread(mtx_path)
+    logger.info(f"Loaded matrix: {A.shape[0]}×{A.shape[1]}, NNZ={A.nnz:,}")
+    return A
+
+
+def fetch_suitesparse_matrix(identifier, output_dir='bench/matrices'):
+    """Fetch matrix from SuiteSparse collection and return path to .mtx file."""
+    try:
+        import ssgetpy
+    except ImportError:
+        logger.error("ssgetpy not installed. Run: pip install ssgetpy")
+        raise
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"Fetching SuiteSparse matrix: {identifier}")
+    matrix_info = ssgetpy.fetch(identifier, format='MM', location=str(output_path), extract=True)
+
+    matrix_dir = output_path / matrix_info['name']
+    mtx_files = list(matrix_dir.glob('*.mtx'))
+    if not mtx_files:
+        raise FileNotFoundError(f"No .mtx file in {matrix_dir}")
+
+    logger.info(f"Fetched: {matrix_info['name']} ({matrix_info['rows']}×{matrix_info['cols']}, NNZ={matrix_info['nnz']:,})")
+    return mtx_files[0]
+
+
 def main():
     """Compile CSL code for cluster execution."""
     script_dir = Path(__file__).resolve().parent
@@ -41,20 +78,30 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Auto-calculate minimum PEs needed
+  # Random matrix generation
   python cluster/compile.py --rows 1000 --cols 1000 --density 0.01 --num-pes min
 
-  # Specific number of PEs
-  python cluster/compile.py --rows 1000 --cols 1000 --density 0.01 --num-pes 16
+  # From MatrixMarket file
+  python cluster/compile.py --mtx-file bench/matrices/HB_bcsstk14/HB_bcsstk14.mtx --num-pes min
 
-  # Custom output paths
-  python cluster/compile.py --rows 500 --cols 500 --density 0.05 \\
-      --num-pes max --artifact-path my_artifact.json --out-path my_out
+  # Fetch from SuiteSparse by ID
+  python cluster/compile.py --fetch-id 1 --num-pes min
+
+  # Fetch by name
+  python cluster/compile.py --fetch-id HB/bcsstk14 --num-pes max
         """
     )
-    parser.add_argument('--rows', type=int, required=True, help='Number of matrix rows')
-    parser.add_argument('--cols', type=int, required=True, help='Number of matrix columns')
-    parser.add_argument('--density', type=float, required=True, help='Sparsity density (0-1)')
+
+    # Matrix source (mutually exclusive)
+    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group.add_argument('--mtx-file', type=str, help='Path to MatrixMarket (.mtx) file')
+    source_group.add_argument('--fetch-id', type=str, help='SuiteSparse matrix ID or name (e.g., 1 or HB/bcsstk14)')
+    source_group.add_argument('--random', action='store_true', help='Generate random matrix (requires --rows, --cols, --density)')
+
+    # Random matrix parameters
+    parser.add_argument('--rows', type=int, help='Number of matrix rows (for random generation)')
+    parser.add_argument('--cols', type=int, help='Number of matrix columns (for random generation)')
+    parser.add_argument('--density', type=float, help='Sparsity density 0-1 (for random generation)')
     parser.add_argument('--num-pes', type=str, default='min',
                        help='Number of PEs: integer, "min", or "max" (default: min)')
     parser.add_argument('--seed', type=int, default=42,
@@ -66,6 +113,12 @@ Examples:
     parser.add_argument('--verbose', '-v', action='store_true',
                        help='Enable verbose debug output')
     args = parser.parse_args()
+
+    # Validate arguments
+    if args.random:
+        if not all([args.rows, args.cols, args.density]):
+            logger.error("--rows, --cols, and --density required with --random")
+            return 1
 
     # resolve paths
     if not Path(args.artifact_path).is_absolute():
@@ -87,13 +140,24 @@ Examples:
     max_width = fabric_dims[0] - fabric_offsets[0]
     max_height = fabric_dims[1] - fabric_offsets[1]
 
-    # generate test matrix
-    logger.info(f"Generating test matrix: {args.rows}×{args.cols}, density={args.density}")
+    # Load or generate matrix
     try:
-        A = generate_random_sparse_matrix(args.rows, args.cols, args.density, args.seed)
-        logger.info(f"Matrix NNZ: {A.nnz:,}")
+        if args.mtx_file:
+            A = load_matrix_market(args.mtx_file)
+        elif args.fetch_id:
+            # Try to parse as int, otherwise treat as name
+            try:
+                fetch_id = int(args.fetch_id)
+            except ValueError:
+                fetch_id = args.fetch_id
+            mtx_path = fetch_suitesparse_matrix(fetch_id)
+            A = load_matrix_market(mtx_path)
+        else:  # --random
+            logger.info(f"Generating random matrix: {args.rows}×{args.cols}, density={args.density}")
+            A = generate_random_sparse_matrix(args.rows, args.cols, args.density, args.seed)
+            logger.info(f"Matrix NNZ: {A.nnz:,}")
     except Exception as e:
-        logger.error(f"Matrix generation failed: {e}")
+        logger.error(f"Matrix loading/generation failed: {e}")
         return 1
 
     try:
@@ -185,13 +249,32 @@ Examples:
 
     # add matrix configuration for reference
     # Convert numpy types to Python native types for JSON serialization
-    artifact_data['matrix_config'] = {
-        'rows': int(args.rows),
-        'cols': int(args.cols),
-        'density': float(args.density),
-        'seed': int(args.seed),
-        'nnz': int(A.nnz)
-    }
+    if args.random:
+        artifact_data['matrix_config'] = {
+            'source': 'random',
+            'rows': int(args.rows),
+            'cols': int(args.cols),
+            'density': float(args.density),
+            'seed': int(args.seed),
+            'nnz': int(A.nnz)
+        }
+    elif args.mtx_file:
+        artifact_data['matrix_config'] = {
+            'source': 'mtx_file',
+            'mtx_file': str(args.mtx_file),
+            'rows': int(A.shape[0]),
+            'cols': int(A.shape[1]),
+            'nnz': int(A.nnz)
+        }
+    else:  # fetch_id
+        artifact_data['matrix_config'] = {
+            'source': 'suitesparse',
+            'fetch_id': args.fetch_id,
+            'mtx_file': str(mtx_path),
+            'rows': int(A.shape[0]),
+            'cols': int(A.shape[1]),
+            'nnz': int(A.nnz)
+        }
     artifact_data['num_pes'] = int(num_pes)
 
     # save enhanced metadata

@@ -2,20 +2,22 @@ DATE := $(shell date -I)
 #PYTHON := python
 PYTHON := uv run
 
-.PHONY: help bench bench-save clean cluster-run cluster-compile
+.PHONY: help bench bench-save clean cluster-run cluster-compile cluster-compile-mtx fetch-matrix
 
 help:
 	@echo "Available targets:"
 	@echo "  make bench SWEEP=name              Run benchmark sweep in bench/configs/"
 	@echo "  make bench-save SWEEP=name         Run and save with date prefix"
-	@echo "  make cluster-compile ROWS=N COLS=N DENSITY=D   Compile for cluster"
+	@echo "  make cluster-compile ROWS=N COLS=N DENSITY=D   Compile for cluster (random matrix)"
+	@echo "  make cluster-compile-mtx MTX=path  Compile for cluster (from MTX file)"
+	@echo "  make fetch-matrix ID=N             Fetch matrix from SuiteSparse"
 	@echo "  make cluster-run                   Run on cluster (after compile)"
 	@echo "  make cluster-sweep CONFIG=path     Run sweep on cluster"
 	@echo "  make clean                         Remove __pycache__"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make bench SWEEP=density-sweep"
-	@echo "  make bench-save SWEEP=strong-scaling"
+	@echo "  make fetch-matrix ID=1"
+	@echo "  make cluster-compile-mtx MTX=bench/matrices/HB_bcsstk14/HB_bcsstk14.mtx"
 	@echo "  make cluster-compile ROWS=10000 COLS=10000 DENSITY=0.01"
 	@echo "  make cluster-sweep CONFIG=bench/configs/cluster/comprehensive-01.csv"
 
@@ -34,7 +36,21 @@ endif
 	$(PYTHON) bench/sweep.py --config bench/configs/$(SWEEP).csv \
 		--output results/data/$(DATE)-$(SWEEP).csv
 
-# Cluster compile: make cluster-compile ROWS=10000 COLS=10000 DENSITY=0.01
+# Fetch matrix from SuiteSparse: make fetch-matrix ID=1
+fetch-matrix:
+ifndef ID
+	$(error ID is not set. Usage: make fetch-matrix ID=1 or ID=HB/bcsstk14)
+endif
+	$(PYTHON) cluster/compile.py --fetch-id $(ID) --num-pes min
+
+# Cluster compile from MTX file: make cluster-compile-mtx MTX=path/to/file.mtx
+cluster-compile-mtx:
+ifndef MTX
+	$(error MTX is not set. Usage: make cluster-compile-mtx MTX=bench/matrices/file.mtx)
+endif
+	$(PYTHON) cluster/compile.py --mtx-file $(MTX) --num-pes min
+
+# Cluster compile (random matrix): make cluster-compile ROWS=10000 COLS=10000 DENSITY=0.01
 cluster-compile:
 ifndef ROWS
 	$(error ROWS is not set. Usage: make cluster-compile ROWS=10000 COLS=10000 DENSITY=0.01)
@@ -45,7 +61,7 @@ endif
 ifndef DENSITY
 	$(error DENSITY is not set. Usage: make cluster-compile ROWS=10000 COLS=10000 DENSITY=0.01)
 endif
-	$(PYTHON) cluster/compile.py --rows $(ROWS) --cols $(COLS) --density $(DENSITY)
+	$(PYTHON) cluster/compile.py --random --rows $(ROWS) --cols $(COLS) --density $(DENSITY)
 
 # Cluster run (uses artifact from compile)
 cluster-run:

@@ -74,8 +74,9 @@ def main():
     # matrix configuration
     parser.add_argument('--rows', type=int, required=True, help='Number of matrix rows')
     parser.add_argument('--cols', type=int, required=True, help='Number of matrix columns')
-    parser.add_argument('--density', type=float, required=True, help='Sparsity density')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    parser.add_argument('--density', type=float, help='Sparsity density (for random generation)')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed (for random generation)')
+    parser.add_argument('--mtx-file', type=str, help='Path to MatrixMarket file (alternative to random generation)')
 
     # PE configuration
     parser.add_argument('--num-pes', type=int, required=True, help='Number of PEs')
@@ -105,14 +106,33 @@ def main():
 
     total_start = time.time()
 
-    # Generate matrix
-    logger.info(f"Generating matrix: {args.rows}×{args.cols}, density={args.density}")
+    # Load or generate matrix
     try:
-        A = generate_random_sparse_matrix(args.rows, args.cols, args.density, args.seed)
+        if args.mtx_file:
+            # Load from MatrixMarket file
+            logger.info(f"Loading MatrixMarket file: {args.mtx_file}")
+            try:
+                import fast_matrix_market as fmm
+            except ImportError:
+                logger.error("fast-matrix-market not installed")
+                return 1
+
+            A = fmm.mmread(args.mtx_file)
+            logger.info(f"Loaded matrix: {A.shape[0]}×{A.shape[1]}, NNZ={A.nnz:,}")
+        else:
+            # Generate random matrix
+            if args.density is None:
+                logger.error("--density required for random generation")
+                return 1
+            logger.info(f"Generating random matrix: {args.rows}×{args.cols}, density={args.density}")
+            A = generate_random_sparse_matrix(args.rows, args.cols, args.density, args.seed)
+            logger.info(f"Matrix NNZ: {A.nnz:,}")
+
+        # Generate random vector
         x = np.random.randint(0, 100, size=args.cols, dtype=np.int32).astype(np.float32)
-        logger.info(f"Matrix NNZ: {A.nnz:,}")
+
     except Exception as e:
-        logger.error(f"Matrix generation failed: {e}")
+        logger.error(f"Matrix loading/generation failed: {e}")
         return 1
 
     # distribute data across PEs
