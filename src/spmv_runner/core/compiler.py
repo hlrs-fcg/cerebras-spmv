@@ -15,7 +15,6 @@ def compile_csl(
     height: int,
     total_nnz_per_pe: int,
     max_rows_per_pe: int,
-    arch: str = "wse3",
     fabric_dims: tuple = (762, 1172),
     fabric_offsets: tuple = (4, 1),
     artifact_path: str = "artifact.json",
@@ -32,7 +31,6 @@ def compile_csl(
     Path(out_path).mkdir(parents=True, exist_ok=True)
 
     ARGS = (
-        f"--arch={arch} "
         f"--fabric-dims={fabric_dims[0]},{fabric_dims[1]} "
         f"--fabric-offsets={fabric_offsets[0]},{fabric_offsets[1]} "
         f"--memcpy --channels=1 "
