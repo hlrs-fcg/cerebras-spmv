@@ -15,6 +15,7 @@ def compile_csl(
     height: int,
     total_nnz_per_pe: int,
     max_rows_per_pe: int,
+    arch: str = "wse3",
     fabric_dims: tuple = (762, 1172),
     fabric_offsets: tuple = (4, 1),
     artifact_path: str = "artifact.json",
@@ -24,7 +25,7 @@ def compile_csl(
 
     # Resolve paths - find project root (where run.py is)
     # Assuming this file is in spmv_runner/core/, project root is 2 levels up
-    project_root = Path(__file__).resolve().parent.parent.parent
+    project_root = Path(__file__).resolve().parent.parent.parent.parent
     src_path = str(project_root / "src")
 
     out_path = str(Path(out_path).resolve())
@@ -34,6 +35,7 @@ def compile_csl(
         f"--fabric-dims={fabric_dims[0]},{fabric_dims[1]} "
         f"--fabric-offsets={fabric_offsets[0]},{fabric_offsets[1]} "
         f"--memcpy --channels=1 "
+        f"--arch=wse3 "
         f"--params=width:{width},height:{height},"
         f"TOTAL_NNZ:{total_nnz_per_pe},MAX_ROWS:{max_rows_per_pe}"
     )
@@ -75,6 +77,7 @@ def compile_csl(
     # Ensure all values are Python native types for JSON serialization
     artifact_data = {
         "artifact_id": artifact_id,
+        "arch": "wse3",
         "fabric_dims": [int(fabric_dims[0]), int(fabric_dims[1])],
         "params": {
             "width": int(width),

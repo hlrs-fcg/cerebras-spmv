@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from spmv_prototype import generate_random_sparse_matrix, MatchedPairsSpMV, validate_results
-from bench import BenchmarkResult, save_benchmark
+from benchmark import BenchmarkResult, save_benchmark
 from spmv_runner.core import (
     calculate_pe_grid,
     print_grid_info,
@@ -275,7 +275,6 @@ Examples:
                 height=height,
                 total_nnz_per_pe=total_nnz_padded,
                 max_rows_per_pe=max_rows_padded,
-                arch=args.arch,
                 fabric_dims=fabric_dims,
                 fabric_offsets=fabric_offsets,
                 artifact_path=args.artifact_path,

@@ -117,7 +117,7 @@ Examples:
     # construct worker_runtime.py command
     # NOTE: Use %CMADDR% template variable - SdkLauncher will substitute it at runtime
     worker_cmd = (
-        f"python cluster/worker_runtime.py "
+        f"python worker_runtime.py "
         f"--name out "  # should match the out directory from compilation
         f"--cmaddr %CMADDR% "
         f"--rows {matrix_config['rows']} "
