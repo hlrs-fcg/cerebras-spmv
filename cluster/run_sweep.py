@@ -41,7 +41,6 @@ def read_sweep_config(config_path: str) -> List[Dict]:
                 'density': float(row['density']),
                 'num_pes': row.get('num_pes', 'min'),  # Can be int or string ('min', 'max')
                 'seed': int(row.get('seed', 42)),
-                'arch': row.get('arch', 'wse3'),
                 'comment': row.get('comment', '')
             }
 
@@ -68,7 +67,6 @@ def run_cluster_compile(config: Dict, artifact_path: str, out_path: str) -> bool
         '--density', str(config['density']),
         '--num-pes', str(config['num_pes']),
         '--seed', str(config['seed']),
-        '--arch', config['arch'],
         '--artifact-path', artifact_path,
         '--out-path', out_path
     ]

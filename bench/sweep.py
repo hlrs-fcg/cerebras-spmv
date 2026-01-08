@@ -186,9 +186,8 @@ Usage:
         """
     )
 
-    parser.add_argument('--config', type=str, action='store_true',
+    parser.add_argument('--config', type=str, 
                        help='Path to CSV file with parameter configurations')
-    default_path = f"{datetime.date()}_{config}"
     parser.add_argument('--results', type=str, default='results/data/benchmark_results.csv',
                        help='Path to save benchmark results CSV')
     parser.add_argument('--run-script', type=str, default='run.py',
@@ -199,6 +198,7 @@ Usage:
                        help='Show detailed output from each run')
 
     args = parser.parse_args()
+    default_path = f"{datetime.date.today()}_{args.config}"
 
     # Load configurations
     configs = load_sweep_config(args.config)
