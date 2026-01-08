@@ -43,7 +43,7 @@ def compile_csl(
     with SdkCompiler(resource_cpu=24000, resource_mem=64<<30, disable_version_check=True) as compiler:
         artifact_id = compiler.compile(
             app_path=src_path,
-            csl_main="layout.csl",
+            csl_main="csl/layout.csl",
             options=ARGS,
             out_path=out_path,
         )
