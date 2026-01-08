@@ -295,10 +295,10 @@ Examples:
 
     parser.add_argument('--config',
                        help='Path to sweep configuration CSV')
-    parser.add_argument('--output', type=str, default='results/data/benchmark_results.csv',
-                       help='Output benchmark CSV (default: results/data/benchmark_results.csv)')
-    parser.add_argument('--work-dir', type=str, default='sweep_work',
-                       help='Working directory for artifacts (default: sweep_work)')
+    parser.add_argument('--output', type=str, default='',
+                       help='Output benchmark CSV (default: auto-generated with date and config name)')
+    parser.add_argument('--work-dir', type=str, default='cluster_work/sweeps',
+                       help='Working directory for artifacts (default: cluster_work/sweeps)')
     parser.add_argument('--simulator', action='store_true',
                        help='Run in simulator mode (for testing)')
     parser.add_argument('--start-index', type=int, default=0,
@@ -313,6 +313,13 @@ Examples:
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
         logger.setLevel(logging.DEBUG)
+
+    # Auto-generate dated output path if not specified
+    if not args.output:
+        import datetime
+        config_name = Path(args.config).stem  # gets filename without .csv
+        args.output = f'results/data/{datetime.date.today().isoformat()}_{config_name}.csv'
+        logger.info(f"Using auto-generated output path: {args.output}")
 
     # Validate config file exists
     if not Path(args.config).exists():
