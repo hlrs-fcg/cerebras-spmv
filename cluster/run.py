@@ -41,8 +41,8 @@ Examples:
   python cluster/run.py --download-benchmark results/my_benchmark.csv
         """
     )
-    parser.add_argument('--artifact-path', type=str, default='artifact_path.json',
-                       help='Path to artifact metadata JSON from cluster/compile.py (default: artifact_path.json)')
+    parser.add_argument('--artifact-path', type=str, default='cluster_work/artifact_path.json',
+                       help='Path to artifact metadata JSON from cluster/compile.py (default: cluster_work/artifact_path.json)')
     parser.add_argument('--simulator', action='store_true',
                        help='Run in simulator mode instead of real hardware')
     parser.add_argument('--download-benchmark', type=str, default='',
@@ -106,6 +106,9 @@ Examples:
         return 1
 
     logger.info(f"Artifact ID: {artifact_id}")
+    logger.info(f"Artifact ID type: {type(artifact_id)}")
+    logger.info(f"Artifact ID length: {len(artifact_id) if artifact_id else 0}")
+    logger.info(f"Full artifact data keys: {list(artifact_data.keys())}")
     logger.info(f"Matrix: {matrix_config['rows']}×{matrix_config['cols']}, NNZ={matrix_config['nnz']:,} (source: {matrix_source})")
     logger.info(f"PEs: {num_pes}, Grid: {params['width']}×{params['height']}")
 
@@ -139,11 +142,14 @@ Examples:
     logger.info(f"Command: {worker_cmd}")
 
     try:
+        logger.info(f"DEBUG: Initializing SdkLauncher with artifact_id={artifact_id}")
+        logger.info(f"DEBUG: simulator={args.simulator}, disable_version_check=True")
         with SdkLauncher(
             artifact_id,
             simulator=args.simulator,
             disable_version_check=True
         ) as launcher:
+            logger.info("DEBUG: SdkLauncher initialized successfully")
             # stage worker_runtime.py and dependencies
             logger.info("Staging worker_runtime.py...")
             launcher.stage("cluster/worker_runtime.py")

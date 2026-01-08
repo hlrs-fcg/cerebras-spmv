@@ -2,20 +2,23 @@ DATE := $(shell date -I)
 #PYTHON := python
 PYTHON := uv run
 
-.PHONY: help bench bench-save clean cluster-run cluster-compile cluster-compile-mtx fetch-matrix
+.PHONY: help bench bench-save clean clean-cluster cluster-test cluster-run cluster-compile cluster-compile-mtx fetch-matrix cluster-sweep
 
 help:
 	@echo "Available targets:"
 	@echo "  make bench SWEEP=name              Run benchmark sweep in bench/configs/"
 	@echo "  make bench-save SWEEP=name         Run and save with date prefix"
+	@echo "  make cluster-test                  Test cluster setup (compile tiny matrix)"
 	@echo "  make cluster-compile ROWS=N COLS=N DENSITY=D   Compile for cluster (random matrix)"
 	@echo "  make cluster-compile-mtx MTX=path  Compile for cluster (from MTX file)"
 	@echo "  make fetch-matrix ID=N             Fetch matrix from SuiteSparse"
 	@echo "  make cluster-run                   Run on cluster (after compile)"
 	@echo "  make cluster-sweep CONFIG=path     Run sweep on cluster"
 	@echo "  make clean                         Remove __pycache__"
+	@echo "  make clean-cluster                 Remove cluster artifacts and work dirs"
 	@echo ""
 	@echo "Examples:"
+	@echo "  make cluster-test"
 	@echo "  make fetch-matrix ID=1"
 	@echo "  make cluster-compile-mtx MTX=bench/matrices/HB_bcsstk14/HB_bcsstk14.mtx"
 	@echo "  make cluster-compile ROWS=10000 COLS=10000 DENSITY=0.01"
@@ -74,7 +77,17 @@ ifndef CONFIG
 endif
 	$(PYTHON) cluster/run_sweep.py --config $(CONFIG)
 
+# Test cluster compilation with tiny matrix
+cluster-test:
+	@echo "Testing cluster compilation with tiny matrix..."
+	$(PYTHON) cluster/compile.py --random --rows 100 --cols 100 --density 0.1 --num-pes 1
+
 # Clean pycache
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
+
+# Clean cluster artifacts and work directories
+clean-cluster:
+	rm -rf cluster_work/ sweep_work/ out/
+	rm -f artifact.json artifact_path.json

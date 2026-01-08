@@ -58,6 +58,7 @@ def read_sweep_config(config_path: str) -> List[Dict]:
 
 def run_cluster_compile(config: Dict, artifact_path: str, out_path: str) -> bool:
     """Run cluster/compile.py for given configuration."""
+    logger.debug(f"DEBUG: Compiling with artifact_path={artifact_path}, out_path={out_path}")
     cmd = [
         sys.executable,
         'cluster/compile.py',
@@ -156,7 +157,7 @@ def count_benchmark_entries(csv_path: str) -> int:
 def run_sweep(
     config_path: str,
     output_csv: str,
-    work_dir: str = 'sweep_work',
+    work_dir: str = 'cluster_work/sweeps',
     simulator: bool = False,
     start_index: int = 0,
     max_runs: Optional[int] = None

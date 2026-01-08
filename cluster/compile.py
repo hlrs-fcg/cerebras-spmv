@@ -106,10 +106,10 @@ Examples:
                        help='Number of PEs: integer, "min", or "max" (default: min)')
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed for matrix generation (default: 42)')
-    parser.add_argument('--artifact-path', type=str, default='artifact_path.json',
-                       help='Path to save artifact metadata JSON (default: artifact_path.json)')
-    parser.add_argument('--out-path', type=str, default='out',
-                       help='Compilation output directory (default: out)')
+    parser.add_argument('--artifact-path', type=str, default='cluster_work/artifact_path.json',
+                       help='Path to save artifact metadata JSON (default: cluster_work/artifact_path.json)')
+    parser.add_argument('--out-path', type=str, default='cluster_work/out',
+                       help='Compilation output directory (default: cluster_work/out)')
     parser.add_argument('--verbose', '-v', action='store_true',
                        help='Enable verbose debug output')
     args = parser.parse_args()

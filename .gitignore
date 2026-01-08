@@ -177,7 +177,10 @@ pyrightconfig.json
 
 # Cerebras artifacts
 out/
+cluster_work/
+sweep_work/
 artifact.json
+artifact_path.json
 *.elf
 
 # Benchmark and test results
