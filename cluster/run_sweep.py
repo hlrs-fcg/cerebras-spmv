@@ -61,6 +61,7 @@ def run_cluster_compile(config: Dict, artifact_path: str, out_path: str) -> bool
     cmd = [
         sys.executable,
         'cluster/compile.py',
+        '--random',
         '--rows', str(config['rows']),
         '--cols', str(config['cols']),
         '--density', str(config['density']),
