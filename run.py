@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from spmv_prototype import generate_random_sparse_matrix, MatchedPairsSpMV, validate_results
-from benchmark import BenchmarkResult, save_benchmark
+from bench.benchmark import BenchmarkResult, save_benchmark
 from spmv_runner.core import (
     calculate_pe_grid,
     print_grid_info,
