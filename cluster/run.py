@@ -176,7 +176,7 @@ Examples:
             download_path = args.download_benchmark if args.download_benchmark else 'results/data/benchmark_results.csv'
             download_path_resolved = str(script_dir / download_path) if not Path(download_path).is_absolute() else download_path
 
-            logger.info(f"\nDownloading benchmark results...")
+            logger.info("\nDownloading benchmark results...")
             try:
                 # ensure parent directory exists
                 Path(download_path_resolved).parent.mkdir(parents=True, exist_ok=True)

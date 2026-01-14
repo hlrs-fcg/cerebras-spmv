@@ -5,12 +5,10 @@ Runs on worker node via SdkLauncher. Executes SpMV on Cerebras hardware.
 """
 
 import argparse
-import json
 import logging
 import subprocess
 import sys
 import time
-from pathlib import Path
 
 import numpy as np
 from cerebras.sdk.runtime.sdkruntimepybind import SdkRuntime, MemcpyDataType, MemcpyOrder

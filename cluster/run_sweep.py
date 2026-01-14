@@ -8,7 +8,6 @@ Handles batching, result aggregation, and error recovery.
 
 import argparse
 import csv
-import json
 import subprocess
 import sys
 import time
@@ -83,7 +82,7 @@ def run_cluster_compile(config: Dict, artifact_path: str, out_path: str) -> bool
         )
 
         if result.returncode != 0:
-            logger.error(f"Compilation failed!")
+            logger.error("Compilation failed!")
             logger.error(f"STDOUT: {result.stdout}")
             logger.error(f"STDERR: {result.stderr}")
             return False
@@ -127,7 +126,7 @@ def run_cluster_execution(
         )
 
         if result.returncode != 0:
-            logger.error(f"Execution failed!")
+            logger.error("Execution failed!")
             logger.error(f"STDOUT: {result.stdout}")
             logger.error(f"STDERR: {result.stderr}")
             return False

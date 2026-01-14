@@ -439,7 +439,7 @@ Examples:
         print("="*70)
         total_runs = 20 + 12 + 12 + 20 + 10 + 15
         print(f"Total runs: ~{total_runs}")
-        print(f"Max PEs: 524,288 (2^19)")
+        print("Max PEs: 524,288 (2^19)")
         print()
         return
 

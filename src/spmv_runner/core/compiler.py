@@ -43,7 +43,7 @@ def compile_csl(
     compile_start = time.time()
 
     logger.info(f"DEBUG: Compiling with app_path={src_path}")
-    logger.info(f"DEBUG: CSL main file: csl/layout.csl")
+    logger.info("DEBUG: CSL main file: csl/layout.csl")
     logger.info(f"DEBUG: Compiler options: {ARGS}")
     logger.info(f"DEBUG: Output path: {out_path}")
 

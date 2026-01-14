@@ -10,7 +10,6 @@ import logging
 import sys
 from pathlib import Path
 
-import numpy as np
 
 from spmv_prototype import generate_random_sparse_matrix, MatchedPairsSpMV
 from spmv_runner.core import (
@@ -205,8 +204,8 @@ Examples:
         logger.error(f"PE {offending_pe} requires {max_memory} bytes ({max_memory/1024:.2f} KB)")
         logger.error("This exceeds the 36 KB target (75% of 48KB hardware limit)")
         logger.error("\nSuggestions:")
-        logger.error(f"  1. Use --num-pes max for more PEs")
-        logger.error(f"  2. Reduce matrix size or density")
+        logger.error("  1. Use --num-pes max for more PEs")
+        logger.error("  2. Reduce matrix size or density")
         logger.error("="*60)
         return 1
 
