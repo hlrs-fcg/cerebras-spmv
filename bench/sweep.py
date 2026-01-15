@@ -198,7 +198,11 @@ Usage:
                        help='Show detailed output from each run')
 
     args = parser.parse_args()
-    default_path = f"{datetime.date.today()}_{args.config}"
+
+    # Auto-generate dated filename if writing to default location
+    if args.results == 'results/data/benchmark_results.csv':
+        config_name = Path(args.config).stem
+        args.results = f'results/data/{datetime.date.today().isoformat()}_{config_name}.csv'
 
     # Load configurations
     configs = load_sweep_config(args.config)
