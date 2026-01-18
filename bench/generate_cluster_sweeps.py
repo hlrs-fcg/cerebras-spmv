@@ -21,12 +21,12 @@ PE_MEMORY_LIMIT = 48000  # bytes per PE
 
 
 def generate_density_sweep(
-    rows: int,
-    cols: int,
-    num_pes: int,
-    density_min: float = 0.001,
-    density_max: float = 0.1,
-    num_points: int = 100,
+    rows: int = 100000,
+    cols: int = 100000,
+    num_pes: int = 262144,
+    density_min: float = 0.0001,
+    density_max: float = 0.01,
+    num_points: int = 20,
     log_scale: bool = True
 ) -> List[Dict]:
     """Generate density sweep with fixed matrix size and PE count.
@@ -54,11 +54,11 @@ def generate_density_sweep(
 
 
 def generate_pe_scaling_sweep(
-    rows: int,
-    cols: int,
-    density: float,
-    pe_start: int = 16,
-    pe_end: int = 16384,
+    rows: int = 200000,
+    cols: int = 200000,
+    density: float = 0.01,
+    pe_start: int = 256,
+    pe_end: int = 524288,
     scaling: str = 'power2'
 ) -> List[Dict]:
     """Generate PE scaling sweep (strong scaling).
@@ -90,8 +90,8 @@ def generate_pe_scaling_sweep(
 
 
 def generate_constant_nnz_sweep(
-    target_nnz: int,
-    num_pes: int,
+    target_nnz: int = 10000000,
+    num_pes: int = 65536,
     num_points: int = 20
 ) -> List[Dict]:
     """Generate constant NNZ sweep with varying matrix dimensions.
@@ -131,9 +131,9 @@ def generate_constant_nnz_sweep(
 
 
 def generate_weak_scaling_sweep(
-    base_nnz_per_pe: int = 1000,
+    base_nnz_per_pe: int = 2048,
     pe_start: int = 16,
-    pe_end: int = 16384,
+    pe_end: int = 524288,
     scaling: str = 'power2'
 ) -> List[Dict]:
     """Generate weak scaling sweep.
@@ -169,10 +169,10 @@ def generate_weak_scaling_sweep(
 
 
 def generate_memory_utilization_sweep(
-    rows: int,
-    cols: int,
+    rows: int = 100000,
+    cols: int = 100000,
     target_utilizations: List[float] = [0.2, 0.4, 0.6, 0.8, 0.95],
-    num_pes: int = 512
+    num_pes: int = 131072
 ) -> List[Dict]:
     """Generate sweep targeting specific memory utilization levels.
 
@@ -210,9 +210,9 @@ def generate_memory_utilization_sweep(
 
 
 def generate_load_balance_study(
-    rows: int,
-    num_pes_list: List[int] = [16, 32, 64, 128, 256, 512, 1024],
-    densities: List[float] = [0.001, 0.01, 0.05, 0.1]
+    rows: int = 100000,
+    num_pes_list: List[int] = [4096, 16384, 65536, 262144, 524288],
+    densities: List[float] = [0.0001, 0.001, 0.01]
 ) -> List[Dict]:
     """Generate configurations for load balancing analysis.
 
@@ -354,9 +354,10 @@ Examples:
 
     elif args.sweep_type == 'weak-scaling':
         configs = generate_weak_scaling_sweep(
-            base_nnz_per_pe=2000,  # ~40% memory utilization
-            pe_start=16,
-            pe_end=16384
+            # just use default
+            # base_nnz_per_pe=2000,  # ~40% memory utilization
+            # pe_start=16,
+            # pe_end=16384
         )
         output_file = output_dir / 'weak-scaling-2000nnz-per-pe.csv'
 
@@ -390,47 +391,40 @@ Examples:
         print("="*70)
         print()
 
-        # 1. Density sweep - 20 points, high PE count
+        # 1. Density sweep - uses defaults
         print("1. Density sweep: 100k×100k matrix, 262,144 PEs")
-        configs.extend(generate_density_sweep(100000, 100000, 262144,
-                                               density_min=0.0001, density_max=0.01, num_points=20))
+        configs.extend(generate_density_sweep())
         save_sweep_config(configs, output_dir / 'comprehensive-01-density-sweep.csv')
         configs = []
 
-        # 2. Strong scaling - up to 2^19 (524,288) PEs
+        # 2. Strong scaling - uses defaults
         print("2. Strong scaling: 200k×200k, density=0.01, 256 → 524,288 PEs")
-        configs.extend(generate_pe_scaling_sweep(200000, 200000, 0.01,
-                                                  pe_start=256, pe_end=524288))
+        configs.extend(generate_pe_scaling_sweep())
         save_sweep_config(configs, output_dir / 'comprehensive-02-strong-scaling.csv')
         configs = []
 
-        # 3. Weak scaling - up to 2^19 (524,288) PEs
-        print("3. Weak scaling: 1000 NNZ/PE, 256 → 524,288 PEs")
-        configs.extend(generate_weak_scaling_sweep(base_nnz_per_pe=1000,
-                                                    pe_start=256, pe_end=524288))
+        # 3. Weak scaling - uses defaults
+        print("3. Weak scaling: 2048 NNZ/PE, 16 → 524,288 PEs")
+        configs.extend(generate_weak_scaling_sweep())
         save_sweep_config(configs, output_dir / 'comprehensive-03-weak-scaling.csv')
         configs = []
 
-        # 4. Constant NNZ - with high PE count
+        # 4. Constant NNZ - uses defaults
         print("4. Arithmetic intensity: 10M NNZ, 65,536 PEs")
-        configs.extend(generate_constant_nnz_sweep(10000000, num_pes=65536, num_points=20))
+        configs.extend(generate_constant_nnz_sweep())
         save_sweep_config(configs, output_dir / 'comprehensive-04-arithmetic-intensity.csv')
         configs = []
 
-        # 5. Memory utilization - at high PE count
+        # 5. Memory utilization - uses defaults + 200k variant
         print("5. Memory utilization: 100k and 200k matrices, 131,072 PEs")
-        configs.extend(generate_memory_utilization_sweep(100000, 100000, num_pes=131072))
-        configs.extend(generate_memory_utilization_sweep(200000, 200000, num_pes=131072))
+        configs.extend(generate_memory_utilization_sweep())
+        configs.extend(generate_memory_utilization_sweep(rows=200000, cols=200000))
         save_sweep_config(configs, output_dir / 'comprehensive-05-memory-utilization.csv')
         configs = []
 
-        # 6. Load balancing - up to 2^19 (524,288) PEs
+        # 6. Load balancing - uses defaults
         print("6. Load balance: 100k×100k, up to 524,288 PEs")
-        configs.extend(generate_load_balance_study(
-            100000,
-            num_pes_list=[4096, 16384, 65536, 262144, 524288],
-            densities=[0.0001, 0.001, 0.01]
-        ))
+        configs.extend(generate_load_balance_study())
         save_sweep_config(configs, output_dir / 'comprehensive-06-load-balance.csv')
 
         print()
