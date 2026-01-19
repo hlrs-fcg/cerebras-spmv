@@ -105,6 +105,7 @@ def main():
     total_start = time.time()
 
     # Load or generate matrix
+    matrix_gen_start = time.time()
     try:
         if args.mtx_file:
             # Load from MatrixMarket file
@@ -125,9 +126,12 @@ def main():
             logger.info(f"Generating random matrix: {args.rows}×{args.cols}, density={args.density}")
             A = generate_random_sparse_matrix(args.rows, args.cols, args.density, args.seed)
             logger.info(f"Matrix NNZ: {A.nnz:,}")
+        matrix_generation_time = time.time() - matrix_gen_start
 
         # Generate random vector
+        vec_gen_start = time.time()
         x = np.random.randint(0, 100, size=args.cols, dtype=np.int32).astype(np.float32)
+        vector_generation_time = time.time() - vec_gen_start
 
     except Exception as e:
         logger.error(f"Matrix loading/generation failed: {e}")
@@ -155,8 +159,11 @@ def main():
 
     # Execute on device using SdkRuntime with cmaddr
     logger.info("Connecting to Cerebras system...")
+    sdk_init_start = time.time()
     try:
         with SdkRuntimeWrapper(args.name, cmaddr=args.cmaddr) as runner:
+            sdk_init_time = time.time() - sdk_init_start
+
             # Get symbol IDs
             sym_num_rows = runner.get_id("num_rows")
             sym_row_offsets = runner.get_id("row_offsets")
@@ -167,8 +174,10 @@ def main():
 
             # Load and start
             logger.info("Loading program...")
+            load_start = time.time()
             runner.load()
             runner.run()
+            program_load_time = time.time() - load_start
 
             # H2D memcpy
             logger.info("Transferring data to device (H2D)...")
@@ -311,9 +320,14 @@ def main():
         return 1
 
     # Gather and validate results
+    gather_start = time.time()
     y_computed = spmv.gather_results(pe_data, all_results)
+    gather_results_time = time.time() - gather_start
+
+    validation_start = time.time()
     y_reference = A.dot(x).astype(np.float32)
     passed = validate_results(y_computed, y_reference, tolerance=1e-4)
+    validation_time = time.time() - validation_start
 
     if passed:
         logger.info("✓ Validation PASSED")
@@ -368,10 +382,14 @@ def main():
             max_memory_per_pe=max_memory,
             avg_memory_per_pe=avg_memory,
             memory_utilization_pct=memory_utilization,
+            matrix_generation_time=matrix_generation_time,
+            vector_generation_time=vector_generation_time,
             distribute_time=distribute_time,
             prepare_matched_pairs_time=prepare_matched_pairs_time,
             total_precond_time=total_lb_time,
-            compile_time=0.0,  # compilation happened on login node
+            compile_time=0.0,
+            sdk_init_time=sdk_init_time,
+            program_load_time=program_load_time,
             memcpy_h2d_time=memcpy_h2d_time,
             compute_time_hw_min=min_time_s,
             compute_time_hw_avg=avg_time_s,
@@ -382,6 +400,8 @@ def main():
             compute_hw_cycles_max=int(max_cycles),
             compute_hw_cycles_std=int(std_cycles),
             memcpy_d2h_time=memcpy_d2h_time,
+            gather_results_time=gather_results_time,
+            validation_time=validation_time,
             total_run_time=memcpy_h2d_time + avg_time_s + memcpy_d2h_time,
             total_time=total_time,
             gflops_hw_avg=gflops_hw_avg,

@@ -54,6 +54,10 @@ class BenchmarkResult:
     avg_memory_per_pe: float = 0.0
     memory_utilization_pct: float = 0.0
 
+    # Host preprocessing timing (seconds)
+    matrix_generation_time: float = 0.0
+    vector_generation_time: float = 0.0
+
     # load balancing timing (seconds)
     distribute_time: float = 0.0  # row distribution algorithm time
     prepare_matched_pairs_time: float = 0.0  # matched pairs transformation time
@@ -61,6 +65,8 @@ class BenchmarkResult:
 
     # Device timing (seconds)
     compile_time: float = 0.0
+    sdk_init_time: float = 0.0
+    program_load_time: float = 0.0
     memcpy_h2d_time: float = 0.0
     compute_time_hw_min: float = 0.0
     compute_time_hw_avg: float = 0.0
@@ -71,6 +77,11 @@ class BenchmarkResult:
     compute_hw_cycles_max: int = 0
     compute_hw_cycles_std: int = 0
     memcpy_d2h_time: float = 0.0
+
+    # Host postprocessing timing (seconds)
+    gather_results_time: float = 0.0
+    validation_time: float = 0.0
+
     total_run_time: float = 0.0
     total_time: float = 0.0
 
