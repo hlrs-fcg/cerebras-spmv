@@ -1,0 +1,6 @@
+rows,cols,density,num_pes,seed,arch,comment
+100000,100000,0.001,4096,42,wse3,"Strong scaling medium: 10M NNZ, 4096 PEs"
+100000,100000,0.001,8192,42,wse3,"Strong scaling medium: 10M NNZ, 8192 PEs"
+100000,100000,0.001,16384,42,wse3,"Strong scaling medium: 10M NNZ, 16384 PEs"
+100000,100000,0.001,32768,42,wse3,"Strong scaling medium: 10M NNZ, 32768 PEs"
+100000,100000,0.001,65536,42,wse3,"Strong scaling medium: 10M NNZ, 65536 PEs"
