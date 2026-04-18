@@ -1,106 +1,75 @@
 # SpMV on Cerebras WSE
 
-SpMV implementation using a matched pairs approach.
+Sparse matrix-vector multiplication (SpMV) on the Cerebras WSE-3 using a matched pairs approach.
 
-## Project Structure
+## How it works
+
+Vector values are pre-gathered on the host using column indices, sending
+`(matrix_val, vector_val)` pairs to each PE. This eliminates vector broadcast
+and index lookup on-device.
+
+**Memory per PE**: ~8 bytes/nonzero + ~8 bytes/row
+
+## Project structure
+
 ```
 .
-├── spmv_runner/              # Modular SpMV runner package
-│   ├── core/                 # Core execution modules
-│   │   ├── compiler.py       # CSL compilation wrapper
-│   │   ├── grid.py           # PE grid calculation & validation
-│   │   ├── runtime.py        # Device runtime & execution
-│   │   └── __init__.py
-│   ├── utils/                # Utility modules
-│   │   ├── memory.py         # Memory calculation & analysis
-│   │   ├── pe_selection.py   # PE count selection algorithms
-│   │   ├── timing.py         # Performance timing & reporting
-│   │   └── __init__.py
-│   └── __init__.py
-├── src/                      # CSL source code
-│   ├── layout.csl            # PE grid layout definition
-│   └── pe.csl                # PE kernel implementation
-├── run.py                    # Main CLI entry point
-└── spmv_prototype.py         # Python prototype implementation
+├── src/
+│   ├── csl/
+│   │   ├── layout.csl              # PE grid layout
+│   │   └── pe.csl                  # Per-PE SpMV kernel
+│   ├── spmv_runner/
+│   │   ├── core/
+│   │   │   ├── compiler.py         # CSL compilation wrapper
+│   │   │   └── grid.py             # PE grid calculation
+│   │   └── utils/
+│   │       ├── memory.py           # Per-PE memory estimation
+│   │       └── pe_selection.py     # PE count auto-selection (min/max)
+│   └── spmv_prototype.py           # Host-side data distribution & validation
+├── cluster/
+│   ├── compile.py                  # Compile on login node
+│   ├── run.py                      # Launch on worker via SdkLauncher
+│   ├── run_sweep.py                # Sweep orchestration
+│   └── worker_runtime.py           # Runs on worker node
+├── bench/
+│   ├── benchmark.py                # BenchmarkResult dataclass + CSV I/O
+│   ├── generate_cluster_sweeps.py  # Generate sweep config CSVs
+│   └── configs/cluster/            # Sweep configurations
+├── results/
+│   ├── data/                       # Benchmark CSVs
+│   └── notebooks/                  # Analysis notebooks
+└── Makefile
 ```
-
-## Functionality
-- **Multi-PE Support**: 1 to 888K+ PEs with automatic grid calculation
-- **PE Selection**: Auto-min (memory), auto-max (parallelism), or manual
-- **Memory Management**: Per-PE validation with 48 KB limit enforcement
-- **Performance Analysis**: Compilation, H2D/D2H transfer, and compute timing
-- **Architecture Support**: WSE-2 (753K PEs) and WSE-3 (888K PEs)
 
 ## Usage
 
+The workflow is always: **compile on login node → run on worker**.
+
 ```bash
-# Auto-minimum PEs (memory-constrained)
-python run.py --rows 1000 --cols 1000 --density 0.01 --num-pes min
+# Test compilation with a tiny matrix
+make cluster-test
 
-# Auto-maximum PEs (maximize parallelism)
-python run.py --rows 1000 --cols 1000 --density 0.01 --num-pes max
+# Compile from a random matrix
+make cluster-compile ROWS=10000 COLS=10000 DENSITY=0.01
 
-# Specific number of PEs
-python run.py --rows 1000 --cols 1000 --density 0.01 --num-pes 16
+# Compile from a .mtx file
+make cluster-compile-mtx MTX=bench/matrices/HB_bcsstk14/HB_bcsstk14.mtx
 
-# Show PE count suggestions
-python run.py --rows 5000 --cols 5000 --density 0.005 --suggest-pes
+# Fetch a matrix from SuiteSparse then compile
+make fetch-matrix ID=HB/bcsstk14
 
-# Compile only (no execution)
-python run.py --rows 1000 --cols 1000 --density 0.01 --num-pes 4 --compile-only
+# Run the compiled artifact on the cluster
+make cluster-run
+
+# Run a full parameter sweep
+make cluster-sweep CONFIG=bench/configs/cluster/strong-scaling-large.csv
 ```
 
-## Options
+`--num-pes` accepts an integer, `min` (auto memory-constrained), or `max` (auto parallelism).
+
+## Generating sweep configs
+
+```bash
+uv run bench/generate_cluster_sweeps.py comprehensive
+uv run bench/generate_cluster_sweeps.py pe-scaling --rows 100000 --cols 100000 --density 0.01
 ```
-usage: run.py [-h] [--rows ROWS] [--cols COLS] [--density DENSITY] [--num-pes NUM_PES] [--seed SEED] [--suggest-pes] [--compile-only] [--artifact-path ARTIFACT_PATH] [--out-path OUT_PATH] [--arch {wse2,wse3}]
-
-optional arguments:
-  -h, --help            show this help message and exit
-  --rows ROWS           Number of rows
-  --cols COLS           Number of columns
-  --density DENSITY     Sparsity density
-  --num-pes NUM_PES     Number of PEs: integer, "min", or "max"
-  --seed SEED           Random seed
-  --suggest-pes         Show PE count suggestions and exit
-  --compile-only        Only compile, do not run
-  --artifact-path ARTIFACT_PATH
-                        Path to save artifact metadata
-  --out-path OUT_PATH   Compilation output directory
-  --arch {wse2,wse3}    Target architecture
-```
-
-## Matched Pairs Approach
-
-Traditional SpMV requires vector broadcast and index lookup during computation. The matched pairs
-approach pre-gathers vector values on host using column indices, sending matrix values with their
-corresponding vector values as pairs. This eliminates communication and indexing overhead on PEs.
-
-**Memory per PE**: ~8 bytes/nonzero + ~8 bytes/row + padding
-
-## Current Limitations 
-### Static Memory Allocation
-Data can be better load balanced. Currently there is safety padding in all PEs
-for edge cases. Sometimes a small percentage of the PEs also doesn't run (1-5%)
-due to the currently implemented load balancing. For possible improvements see
-below.
-
-### Benchmark Storage
-`.csv` is used for benchmark results, which is fragile when schema changes.
-There is migration logic handling this, but SQLite would provide better schema
-versioning, type safety, and query capabilities.
-
-### Load Balancing
-Current distribution uses simple NNZ-based balancing. Could improve with:
-- Row-based partitioning strategies
-- Dynamic rebalancing based on computation patterns
-- Better handling of highly skewed distributions
-
-### Hardware Constraints
-- 48 KB memory limit per PE
-- Single precision (f32) only
-
-### Matrix Input Format
-Currently only supports CSR format as input. Could probably trivially implement:
-- CSC format support 
-- Direct COO input 
-- Matrix Market file reading 
