@@ -5,7 +5,6 @@ Pure Python implementation to test data distribution and computation logic
 before implementing in CSL.
 """
 
-import argparse
 import numpy as np
 import scipy.sparse as sp
 import logging
@@ -165,36 +164,6 @@ class MatchedPairsSpMV:
             
             logging.debug(f"PE {pe['pe_id']}: prepared {len(matrix_values)} matched pairs")
     
-    def compute_on_pe(self, pe: dict) -> np.ndarray:
-        """
-        Simulate PE computation: SpMV using matched pairs.
-        
-        This mimics what the CSL kernel will do on the actual PE.
-        
-        Args:
-            pe: PE data dictionary with matched pairs
-            
-        Returns:
-            Result vector for this PE's rows
-        """
-        if pe['num_rows'] == 0:
-            return np.array([], dtype=np.float32)
-        
-        results = np.zeros(pe['num_rows'], dtype=np.float32)
-        
-        for local_row in range(pe['num_rows']):
-            start = pe['row_offsets'][local_row]
-            end = pe['row_offsets'][local_row + 1]
-            
-            # Dot product using matched pairs
-            dot_product = 0.0
-            for i in range(start, end):
-                dot_product += pe['matrix_values'][i] * pe['vector_values'][i]
-            
-            results[local_row] = dot_product
-        
-        return results
-    
     def gather_results(self, pe_data: list, pe_results: list) -> np.ndarray:
         """
         Gather results from all PEs into a single result vector.
@@ -214,29 +183,6 @@ class MatchedPairsSpMV:
         
         return result_vector
     
-    def print_distribution_stats(self, pe_data: list):
-        """Print statistics about the row distribution."""
-        logging.info("\n" + "="*60)
-        logging.info("Distribution Statistics")
-        logging.info("="*60)
-        
-        for pe in pe_data:
-            if pe['num_rows'] > 0:
-                logging.info(f"PE {pe['pe_id']:3d}: {pe['num_rows']:4d} rows, "
-                           f"{pe['total_nnz']:6d} NNZ")
-        
-        # Overall stats
-        total_rows = sum(pe['num_rows'] for pe in pe_data)
-        total_nnz = sum(pe['total_nnz'] for pe in pe_data)
-        active_pes = sum(1 for pe in pe_data if pe['num_rows'] > 0)
-        
-        logging.info("-"*60)
-        logging.info(f"Total rows: {total_rows}")
-        logging.info(f"Total NNZ: {total_nnz}")
-        logging.info(f"Active PEs: {active_pes}/{self.num_pes}")
-        logging.info("="*60 + "\n")
-
-
 def generate_random_sparse_matrix(rows: int, cols: int, density: float, seed: int = 42, cache_dir: str = "matrices"):
     """
     Generate a random sparse matrix in CSR format with caching.
@@ -350,54 +296,3 @@ def validate_results(y_computed: np.ndarray, y_reference: np.ndarray, tolerance:
     return passed
 
 
-def main():
-    parser = argparse.ArgumentParser(description='SpMV Matched Pairs Prototype')
-    parser.add_argument('--rows', type=int, default=10, help='Number of rows')
-    parser.add_argument('--cols', type=int, default=10, help='Number of columns')
-    parser.add_argument('--density', type=float, default=0.1, help='Sparsity density')
-    parser.add_argument('--num-pes', type=int, default=1, help='Number of PEs')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed')
-    parser.add_argument('--tolerance', type=float, default=1e-4, 
-                       help='Validation tolerance for f32 errors')
-    parser.add_argument('--log', type=str, default='info', 
-                       choices=['debug', 'info', 'warning'],
-                       help='Logging level')
-    args = parser.parse_args()
-    
-    # Setup logging
-    log_level = getattr(logging, args.log.upper())
-    logging.basicConfig(
-        level=log_level,
-        format='%(levelname)s: %(message)s'
-    )
-    
-    # Generate test data
-    logging.info(f"Generating random matrix: {args.rows}x{args.cols}, density={args.density}")
-    A = generate_random_sparse_matrix(args.rows, args.cols, args.density, args.seed)
-    x = np.random.randint(0, 100, size=args.cols, dtype=np.int32).astype(np.float32)
-    
-    logging.info(f"Matrix: {A.shape}, NNZ: {A.nnz}")
-    logging.debug(f"Vector x: {x}")
-
-    spmv = MatchedPairsSpMV(A, args.num_pes)
-    pe_data = spmv.distribute_by_nnz()
-    spmv.prepare_matched_pairs(pe_data, x)
-    spmv.print_distribution_stats(pe_data)
-
-    pe_results = []
-    for pe in pe_data:
-        results = spmv.compute_on_pe(pe)
-        pe_results.append(results)
-
-    y_computed = spmv.gather_results(pe_data, pe_results)
-    y_reference = A.dot(x).astype(np.float32)
-    passed = validate_results(y_computed, y_reference, tolerance=args.tolerance)
-    
-    if not passed:
-        return 1
-    
-    return 0
-
-
-if __name__ == "__main__":
-    exit(main())
