@@ -1,13 +1,12 @@
 """Intelligent PE count selection and auto-calculation."""
 
-import logging
 import numpy as np
 import scipy.sparse as sp
 
 from .memory import calculate_memory_per_pe
 from ..core.grid import calculate_pe_grid
 
-logger = logging.getLogger(__name__)
+from utils.logging import logger
 
 
 def calculate_min_pes_needed(matrix_nnz: int, matrix_rows: int, max_memory: int = 36_000) -> int:

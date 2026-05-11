@@ -9,6 +9,7 @@ description = "Sparse Matrix-Vector Multiplication on Cerebras WSE"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
+    "loguru>=0.7.3",
     "numpy",
     "scipy",
 ]

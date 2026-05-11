@@ -13,14 +13,8 @@ import sys
 import time
 from pathlib import Path
 from typing import List, Dict, Optional
-import logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s: %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-logger = logging.getLogger(__name__)
+from utils.logging import logger, setup_logging
 
 
 def read_sweep_config(config_path: str) -> List[Dict]:
@@ -309,9 +303,7 @@ Examples:
 
     args = parser.parse_args()
 
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logger.setLevel(logging.DEBUG)
+    setup_logging(level="DEBUG" if args.verbose else "INFO")
 
     # Auto-generate dated output path if not specified
     if not args.output:

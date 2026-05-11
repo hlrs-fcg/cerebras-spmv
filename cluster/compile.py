@@ -6,11 +6,11 @@ Compiles CSL code on login node for later execution via SdkLauncher.
 
 import argparse
 import json
-import logging
 import sys
 from pathlib import Path
 
 
+from utils.logging import logger, setup_logging
 from spmv_prototype import generate_random_sparse_matrix, MatchedPairsSpMV
 from spmv_runner.core import (
     calculate_pe_grid,
@@ -23,13 +23,6 @@ from spmv_runner.utils import (
     print_memory_analysis,
     parse_num_pes_arg
 )
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(levelname)s: %(message)s'
-)
-logger = logging.getLogger(__name__)
-
 
 def load_matrix_market(mtx_path):
     """Load matrix from MatrixMarket file using fast-matrix-market."""
@@ -70,6 +63,7 @@ def fetch_suitesparse_matrix(identifier, output_dir='bench/matrices'):
 
 def main():
     """Compile CSL code for cluster execution."""
+    setup_logging()
     script_dir = Path(__file__).resolve().parent
 
     parser = argparse.ArgumentParser(
@@ -126,8 +120,7 @@ Examples:
         args.out_path = str(script_dir / args.out_path)
 
     if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logger.setLevel(logging.DEBUG)
+        setup_logging(level="DEBUG")
 
     logger.info("="*60)
     logger.info("Cluster Compilation - Login Node")

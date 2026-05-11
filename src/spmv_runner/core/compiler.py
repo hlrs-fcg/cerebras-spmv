@@ -1,13 +1,12 @@
 """CSL compilation using Cerebras SDK compiler."""
 
 import json
-import logging
 import time
 from pathlib import Path
 
 from cerebras.sdk.client import SdkCompiler
 
-logger = logging.getLogger(__name__)
+from utils.logging import logger
 
 
 def compile_csl(

@@ -5,13 +5,12 @@ Provides dataclass and CSV utilities for saving SpMV benchmark results.
 """
 
 import csv
-import logging
 from dataclasses import dataclass, field, asdict, fields
 from datetime import datetime
 from pathlib import Path
 from typing import List
 
-logger = logging.getLogger(__name__)
+from utils.logging import logger
 
 
 @dataclass

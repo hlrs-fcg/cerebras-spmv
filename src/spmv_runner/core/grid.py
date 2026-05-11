@@ -1,8 +1,6 @@
 """PE grid calculation and fabric constraint validation."""
 
-import logging
-
-logger = logging.getLogger(__name__)
+from utils.logging import logger
 
 
 def calculate_pe_grid(num_pes: int,

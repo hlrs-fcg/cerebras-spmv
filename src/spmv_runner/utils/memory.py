@@ -1,9 +1,8 @@
 """Memory calculation and feasibility checking for PE allocation."""
 
-import logging
 import numpy as np
 
-logger = logging.getLogger(__name__)
+from utils.logging import logger
 
 
 def calculate_memory_per_pe(num_rows: int, nnz: int) -> int:

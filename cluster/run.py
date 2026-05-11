@@ -6,21 +6,17 @@ Uses SdkLauncher to submit worker_runtime.py for execution on cluster worker nod
 
 import argparse
 import json
-import logging
 import sys
 from pathlib import Path
 
 from cerebras.sdk.client import SdkLauncher
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(levelname)s: %(message)s'
-)
-logger = logging.getLogger(__name__)
+from utils.logging import logger, setup_logging
 
 
 def main():
     """Launch worker runtime via SdkLauncher."""
+    setup_logging()
     script_dir = Path(__file__).resolve().parent
 
     parser = argparse.ArgumentParser(
@@ -57,8 +53,7 @@ Examples:
 
     # configure logging
     if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logger.setLevel(logging.DEBUG)
+        setup_logging(level="DEBUG")
 
     logger.info("="*60)
     logger.info("Cluster Launcher - Login Node")
