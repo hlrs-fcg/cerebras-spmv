@@ -234,7 +234,7 @@ def load_benchmarks(csv_path: str = "tests/benchmark_results.csv") -> List[Bench
                 result = BenchmarkResult.from_dict(typed_row)
                 results.append(result)
             except Exception as e:
-                logger.warning(f"Failed to parse row: {e}")
+                logger.opt(exception=True).warning("Failed to parse row")
                 continue
 
     logger.info(f"Loaded {len(results)} benchmark results from {csv_file}")

@@ -88,7 +88,7 @@ def run_cluster_compile(config: Dict, artifact_path: str, out_path: str) -> bool
         logger.error("Compilation timed out (10 minutes)")
         return False
     except Exception as e:
-        logger.error(f"Compilation error: {e}")
+        logger.exception("Compilation error")
         return False
 
 
@@ -132,7 +132,7 @@ def run_cluster_execution(
         logger.error("Execution timed out (30 minutes)")
         return False
     except Exception as e:
-        logger.error(f"Execution error: {e}")
+        logger.exception("Execution error")
         return False
 
 
@@ -226,9 +226,7 @@ def run_sweep(
 
         except Exception as e:
             failed += 1
-            logger.error(f"❌ Run {i+1} failed with exception: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.exception(f"Run {i+1} failed")
 
         # Progress summary
         elapsed = time.time() - start_time
