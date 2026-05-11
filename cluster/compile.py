@@ -21,7 +21,7 @@ from spmv_runner.core import (
 from spmv_runner.utils import (
     check_memory_feasibility,
     print_memory_analysis,
-    parse_num_pes_arg
+    calculate_max_pes_useful,
 )
 
 def load_matrix_market(mtx_path):
@@ -95,8 +95,8 @@ Examples:
     parser.add_argument('--rows', type=int, help='Number of matrix rows (for random generation)')
     parser.add_argument('--cols', type=int, help='Number of matrix columns (for random generation)')
     parser.add_argument('--density', type=float, help='Sparsity density 0-1 (for random generation)')
-    parser.add_argument('--num-pes', type=str, default='min',
-                       help='Number of PEs: integer, "min", or "max" (default: min)')
+    parser.add_argument('--num-pes', type=int, default=None,
+                       help='Number of PEs (default: max that fits the matrix)')
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed for matrix generation (default: 42)')
     parser.add_argument('--artifact-path', type=str, default='cluster_work/artifact_path.json',
@@ -152,11 +152,7 @@ Examples:
         logger.error(f"Matrix loading/generation failed: {e}")
         return 1
 
-    try:
-        num_pes = parse_num_pes_arg(args.num_pes, A, max_width, max_height)
-    except ValueError as e:
-        logger.error(f"PE calculation failed: {e}")
-        return 1
+    num_pes = args.num_pes if args.num_pes is not None else calculate_max_pes_useful(A.shape[0], max_width, max_height)
 
     logger.info(f"Number of PEs: {num_pes}")
 
