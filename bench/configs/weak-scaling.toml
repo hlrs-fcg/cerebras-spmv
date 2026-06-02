@@ -1,0 +1,17 @@
+[meta]
+name        = "weak-scaling"
+description = "NNZ per PE held constant as PE count grows (weak scaling)"
+
+[output]
+work_dir = "cluster_work/sweeps/weak-scaling"
+results  = "cluster/results/data/{date}_{name}.csv"
+
+[sweep]
+type       = "weak_scaling"
+density    = 0.01
+seed       = 42
+nnz_per_pe = 2000
+
+[sweep.num_pes]
+pow2_up_to        = "fabric_max"
+points_per_octave = 2

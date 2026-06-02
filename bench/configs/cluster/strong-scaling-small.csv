@@ -1,7 +1,0 @@
-rows,cols,density,num_pes,seed,arch,comment
-50000,50000,0.0002,128,42,wse3,"Strong scaling small: 500K NNZ, 128 PEs"
-50000,50000,0.0002,256,42,wse3,"Strong scaling small: 500K NNZ, 256 PEs"
-50000,50000,0.0002,512,42,wse3,"Strong scaling small: 500K NNZ, 512 PEs"
-50000,50000,0.0002,1024,42,wse3,"Strong scaling small: 500K NNZ, 1024 PEs"
-50000,50000,0.0002,2048,42,wse3,"Strong scaling small: 500K NNZ, 2048 PEs"
-50000,50000,0.0002,4096,42,wse3,"Strong scaling small: 500K NNZ, 4096 PEs"

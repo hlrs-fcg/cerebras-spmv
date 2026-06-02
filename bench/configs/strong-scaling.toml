@@ -1,0 +1,18 @@
+[meta]
+name        = "strong-scaling"
+description = "Fixed matrix size, varying PE count (strong scaling)"
+
+[output]
+work_dir = "cluster_work/sweeps/strong-scaling"
+results  = "cluster/results/data/{date}_{name}.csv"
+
+[sweep]
+type    = "strong_scaling"
+rows    = 10_000_000
+cols    = 10_000_000
+density = 0.001
+seed    = 42
+
+[sweep.num_pes]
+pow2_up_to        = "fabric_max"
+points_per_octave = 2
