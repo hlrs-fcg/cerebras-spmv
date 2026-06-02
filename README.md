@@ -1,75 +1,49 @@
 # SpMV on Cerebras WSE
 
-Sparse matrix-vector multiplication (SpMV) on the Cerebras WSE-3 using a matched pairs approach.
+Sparse matrix-vector multiplication (SpMV) on the Cerebras WSE-3.
 
-## How it works
+## Published work
 
-Vector values are pre-gathered on the host using column indices, sending
-`(matrix_val, vector_val)` pairs to each PE. This eliminates vector broadcast
-and index lookup on-device.
+The initial implementation and scaling results were presented at ISC26 (June 2026).
+Source code at that point is tagged **v1.0**. See [docs/adr/ADR-000](docs/adr/ADR-000-v1-baseline-isc26.md) for a description of the v1.0 architecture and its known limitations.
 
-**Memory per PE**: ~8 bytes/nonzero + ~8 bytes/row
+Architecture decisions going forward are documented in [docs/adr/](docs/adr/).
 
-## Project structure
+## Structure
 
 ```
 .
-├── src/
-│   ├── csl/
-│   │   ├── layout.csl              # PE grid layout
-│   │   └── pe.csl                  # Per-PE SpMV kernel
-│   ├── spmv_runner/
-│   │   ├── core/
-│   │   │   ├── compiler.py         # CSL compilation wrapper
-│   │   │   └── grid.py             # PE grid calculation
-│   │   └── utils/
-│   │       ├── memory.py           # Per-PE memory estimation
-│   │       └── pe_selection.py     # PE count auto-selection (min/max)
-│   └── spmv_prototype.py           # Host-side data distribution & validation
+├── bench/                  # BenchmarkResult dataclass and CSV I/O
 ├── cluster/
-│   ├── compile.py                  # Compile on login node
-│   ├── run.py                      # Launch on worker via SdkLauncher
-│   ├── run_sweep.py                # Sweep orchestration
-│   └── worker_runtime.py           # Runs on worker node
-├── bench/
-│   ├── benchmark.py                # BenchmarkResult dataclass + CSV I/O
-│   ├── generate_cluster_sweeps.py  # Generate sweep config CSVs
-│   └── configs/cluster/            # Sweep configurations
-├── results/
-│   ├── data/                       # Benchmark CSVs
-│   └── notebooks/                  # Analysis notebooks
-└── Makefile
+│   ├── results/data/       # Benchmark CSVs from cluster runs
+│   ├── run_sweep.py        # Sweep orchestration (compile + run per config)
+│   └── worker_runtime.py   # Runs on the worker node via SdkLauncher
+├── docs/adr/               # Architecture decision records
+├── sdk/
+│   ├── compiler.py         # CSL compilation wrapper (login node)
+│   └── launcher.py         # SdkLauncher wrapper (worker node)
+├── src/csl/
+│   ├── layout.csl          # PE grid layout
+│   └── pe.csl              # Per-PE SpMV kernel
+├── utils/
+│   ├── matrix_generation.py
+│   └── validation.py
+├── compile.py              # Compile a single configuration on the login node
+├── config.py               # SpMVConfig dataclass
+└── run.py                  # Run a compiled artifact on the worker node
 ```
 
 ## Usage
 
-The workflow is always: **compile on login node → run on worker**.
+The workflow is: **compile on login node, run on worker node.**
 
 ```bash
-# Test compilation with a tiny matrix
-make cluster-test
+# Compile a single configuration
+uv run python compile.py --rows 10000 --cols 10000 --density 0.01
 
-# Compile from a random matrix
-make cluster-compile ROWS=10000 COLS=10000 DENSITY=0.01
+# Run the compiled artifact
+uv run python run.py
 
-# Compile from a .mtx file
-make cluster-compile-mtx MTX=bench/matrices/HB_bcsstk14/HB_bcsstk14.mtx
-
-# Fetch a matrix from SuiteSparse then compile
-make fetch-matrix ID=HB/bcsstk14
-
-# Run the compiled artifact on the cluster
-make cluster-run
-
-# Run a full parameter sweep
-make cluster-sweep CONFIG=bench/configs/cluster/strong-scaling-large.csv
-```
-
-`--num-pes` accepts an integer, `min` (auto memory-constrained), or `max` (auto parallelism).
-
-## Generating sweep configs
-
-```bash
-uv run bench/generate_cluster_sweeps.py comprehensive
-uv run bench/generate_cluster_sweeps.py pe-scaling --rows 100000 --cols 100000 --density 0.01
+# Run a parameter sweep from a CSV config
+uv run python cluster/run_sweep.py bench/configs/cluster/strong-scaling-large.csv
 ```
