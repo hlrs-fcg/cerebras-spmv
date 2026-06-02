@@ -148,28 +148,24 @@ def save_benchmark(result: BenchmarkResult,
 
     fieldnames = [f.name for f in fields(BenchmarkResult)]
 
-    # Check if we need to migrate the CSV schema
     if file_exists:
         with open(csv_file, 'r', newline='', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            existing_fieldnames = reader.fieldnames or []
+            existing_fieldnames = set(csv.DictReader(f).fieldnames or [])
 
-            if set(existing_fieldnames) != set(fieldnames):
-                logger.info(f"Migrating {csv_file.name} to new schema...")
-                existing_rows = list(reader)
-
-                backup_path = csv_file.with_suffix('.csv.bak')
-                csv_file.rename(backup_path)
-
-                with open(csv_file, 'w', newline='', encoding='utf-8') as new_f:
-                    writer = csv.DictWriter(new_f, fieldnames=fieldnames)
-                    writer.writeheader()
-
-                    for row in existing_rows:
-                        migrated_row = {fn: row.get(fn, '') for fn in fieldnames}
-                        writer.writerow(migrated_row)
-
-                logger.info(f"Migrated {len(existing_rows)} rows (backup: {backup_path.name})")
+        current_fieldnames = set(fieldnames)
+        if existing_fieldnames != current_fieldnames:
+            added = sorted(current_fieldnames - existing_fieldnames)
+            removed = sorted(existing_fieldnames - current_fieldnames)
+            parts = []
+            if added:
+                parts.append(f"new: {added}")
+            if removed:
+                parts.append(f"removed: {removed}")
+            logger.warning(
+                f"Schema mismatch in {csv_file.name} ({', '.join(parts)}). "
+                f"Rename or delete it to resume saving."
+            )
+            return
 
     mode = 'a' if file_exists else 'w'
 
@@ -207,6 +203,7 @@ def load_benchmarks(csv_path: str = "tests/benchmark_results.csv") -> List[Bench
 
     field_types = {f.name: f.type for f in fields(BenchmarkResult)}
 
+    skipped = 0
     with open(csv_file, 'r', newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
 
@@ -234,9 +231,11 @@ def load_benchmarks(csv_path: str = "tests/benchmark_results.csv") -> List[Bench
                 result = BenchmarkResult.from_dict(typed_row)
                 results.append(result)
             except Exception as e:
-                logger.opt(exception=True).warning("Failed to parse row")
-                continue
+                logger.warning(f"Skipping malformed row {reader.line_num}: {e}")
+                skipped += 1
 
+    if skipped:
+        logger.warning(f"Skipped {skipped} malformed row(s) in {csv_file.name}")
     logger.info(f"Loaded {len(results)} benchmark results from {csv_file}")
     return results
 

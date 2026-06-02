@@ -7,7 +7,6 @@ Self-contained: no imports from login-node utils/ or sdk/.
 
 import argparse
 import logging
-import subprocess
 import sys
 import time
 
@@ -211,22 +210,6 @@ class SdkRuntimeWrapper:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def get_git_commit_hash() -> str:
-    try:
-        result = subprocess.run(
-            ['git', 'rev-parse', '--short', 'HEAD'],
-            capture_output=True, text=True, check=True, timeout=1
-        )
-        return result.stdout.strip()
-    except Exception:
-        return "unknown"
-
-
-def _pad(arr: np.ndarray, target_len: int, dtype) -> np.ndarray:
-    """Right-pad arr to target_len with zeros."""
-    out = np.zeros(target_len, dtype=dtype)
-    out[:len(arr)] = arr
-    return out
 
 
 # ---------------------------------------------------------------------------
@@ -490,15 +473,17 @@ def main():
         rel_error = float(np.linalg.norm(y_computed - y_reference) / ref_norm)
 
     if args.save_benchmark:
+        if args.density == 0.0:
+            logger.warning("density=0.0 — density metric will be recorded as 0")
         benchmark = BenchmarkResult(
-            git_commit=get_git_commit_hash(),
+            git_commit="unknown",
             validation_passed=passed,
             exit_reason="SUCCESS" if passed else "VALIDATION_FAILED",
             error_message="" if passed else "Results do not match reference",
             relative_error=rel_error,
             matrix_rows=args.rows,
             matrix_cols=args.cols,
-            density=args.density or 0.0,
+            density=args.density if args.density is not None else 0.0,
             total_nnz=A.nnz,
             seed=args.seed,
             num_pes=args.num_pes,
