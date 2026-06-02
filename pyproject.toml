@@ -1,14 +1,17 @@
-[build-system]
-requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "spmv"
-version = "0.1.0"
 description = "Sparse Matrix-Vector Multiplication on Cerebras WSE"
+keywords = [ "cerebras", "wse3", "qubo", "maxcut" ]
+
+authors = [
+	{name = "Daniel Renschler", email = "renschler@hlrs.de"},
+]
+
+version = "0.1.0"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 dependencies = [
+    "cerebras-sdk==2.10.0; sys_platform == 'linux'",
     "loguru>=0.7.3",
     "numpy",
     "scipy",
@@ -21,8 +24,7 @@ dev = [
     "pandas",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-data]
-"*" = ["*.csl"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["sdk: requires Cerebras SDK and simulator"]

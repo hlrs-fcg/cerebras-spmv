@@ -1,5 +1,0 @@
-rows,cols,density,num_pes,seed,arch,comment
-200000,200000,0.001,65536,42,wse3,"Strong scaling large: 40M NNZ, 65536 PEs"
-200000,200000,0.001,131072,42,wse3,"Strong scaling large: 40M NNZ, 131072 PEs"
-200000,200000,0.001,262144,42,wse3,"Strong scaling large: 40M NNZ, 262144 PEs"
-200000,200000,0.001,524288,42,wse3,"Strong scaling large: 40M NNZ, 524288 PEs"

@@ -4,12 +4,11 @@ import csv
 import tempfile
 from pathlib import Path
 
-from cerebras.sdk.client import SdkLauncher
 from config import SpMVConfig
 from utils.logging import logger
 
 
-def run(cfg: SpMVConfig, download_path: Path = Path("cluster/results/data/benchmark_results.csv")) -> None:
+def run(cfg: SpMVConfig, download_path: Path = Path("bench/data/benchmark_results.csv")) -> None:
     """Stage and run worker_runtime.py via SdkLauncher. Downloads benchmark CSV on completion."""
     worker_cmd = (
         f"python worker_runtime.py"
@@ -21,6 +20,8 @@ def run(cfg: SpMVConfig, download_path: Path = Path("cluster/results/data/benchm
         f" --grid-width {cfg.width}"
         f" --grid-height {cfg.height}"
         f" --arch {cfg.arch}"
+        f" --total-nnz-per-pe {cfg.total_nnz_per_pe}"
+        f" --max-rows-per-pe {cfg.max_rows_per_pe}"
         f" --save-benchmark benchmark_results.csv"
     )
 
@@ -32,14 +33,14 @@ def run(cfg: SpMVConfig, download_path: Path = Path("cluster/results/data/benchm
     logger.info(f"Launching with artifact_id={cfg.artifact_id}")
     logger.debug(f"Worker command: {worker_cmd}")
 
+    from cerebras.sdk.client import SdkLauncher
+
     with SdkLauncher(
         cfg.artifact_id,
         simulator=cfg.simulator,
         disable_version_check=cfg.disable_version_check,
     ) as launcher:
         launcher.stage("cluster/worker_runtime.py")
-        launcher.stage("src/spmv_prototype.py")
-        launcher.stage("src/spmv_runner")
         launcher.stage("bench/__init__.py")
         launcher.stage("bench/benchmark.py")
 

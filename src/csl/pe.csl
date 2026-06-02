@@ -1,6 +1,6 @@
 // pe.csl - SIMD optimized with DSDs (TYPE-FIXED)
 
-param memcpy_params: comptime_struct;
+param memcpy_params;
 param TOTAL_NNZ: i16;
 param MAX_ROWS: i16;
 

@@ -23,7 +23,10 @@ class SpMVConfig:
     out_path: Path = Path("cluster_work/out")
     comment: str = ""
 
-    # grid — derived from fabric in __post_init__, not overridable
+    # optional PE count limit; None = use full fabric
+    num_pes_target: Optional[int] = None
+
+    # grid — derived from fabric + num_pes_target in __post_init__, not overridable
     width: int = field(init=False)
     height: int = field(init=False)
     num_pes: int = field(init=False)
@@ -36,8 +39,18 @@ class SpMVConfig:
     artifact_id: str = field(init=False, default="")
 
     def __post_init__(self):
-        self.width  = self.fabric_dims[0] - self.fabric_offsets[0] - self.padding[0]
-        self.height = self.fabric_dims[1] - self.fabric_offsets[1] - self.padding[1]
+        max_w = self.fabric_dims[0] - self.fabric_offsets[0] - self.padding[0]
+        max_h = self.fabric_dims[1] - self.fabric_offsets[1] - self.padding[1]
+
+        if self.num_pes_target is not None:
+            w = min(self.num_pes_target, max_w)
+            h = min((self.num_pes_target + w - 1) // w, max_h)
+            self.width = w
+            self.height = h
+        else:
+            self.width = max_w
+            self.height = max_h
+
         self.num_pes = self.width * self.height
 
         if self.total_nnz_per_pe is None and self.rows > 0:
