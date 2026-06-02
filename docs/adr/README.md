@@ -14,6 +14,7 @@ Each ADR captures the context, decision, and trade-offs at the time the decision
 | [ADR-004](ADR-004-host-preprocessing-pipeline.md) | Parallel Host Preprocessing Pipeline (CSR → Column Slices) | Accepted |
 | [ADR-005](ADR-005-aggregation-and-cg-compatibility.md) | On-Wafer Aggregation and CG Compatibility | Accepted |
 | [ADR-006](ADR-006-csl-colors-for-pe-roles.md) | CSL Colors for PE Role Differentiation | Accepted |
+| [ADR-007](ADR-007-toml-sweep-config.md) | TOML Sweep Configuration (replacing CSV + argparse + Makefile) | Accepted |
 
 ## Design Summary
 

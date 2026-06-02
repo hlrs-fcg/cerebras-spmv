@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import scipy.sparse as sp
 
+#TODO: probably place where one should add multithreading
 
 def generate_random_sparse_matrix(
     rows: int, cols: int, density: float, seed: int = 42, cache_dir: str = "matrices"

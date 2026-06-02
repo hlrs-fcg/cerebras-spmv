@@ -1,33 +1,71 @@
-// layout.csl - Multi-PE grid layout
-param width: i16 = 1;
-param height: i16 = 1;
-param TOTAL_NNZ: i16 = 50;
-param MAX_ROWS: i16 = 20;
+// layout.csl — 2D PE grid with east-west reduction routing
+param width:     i16;
+param height:    i16;
+param KX:        i16;   // x elements per PE column = ceil(cols / width)
+param KY:        i16;   // rows per PE row           = ceil(rows / height)
+param TOTAL_NNZ: i16;   // A tile buffer size (compile-time max NNZ per tile)
+
+const REDUCE_COLOR: color = @get_color(1);
+
 const memcpy = @import_module("<memcpy/get_params>", .{
-    .width = width,
+    .width  = width,
     .height = height,
 });
 
 layout {
     @set_rectangle(width, height);
 
-    var y: i16 = 0;
-    while (y < height) : (y += 1) {
-        var x: i16 = 0;
-        while (x < width) : (x += 1) {
-            @set_tile_code(x, y, "pe.csl", .{
-                .memcpy_params = memcpy.get_params(x),
+    var py: i16 = 0;
+    while (py < height) : (py += 1) {
+        var px: i16 = 0;
+        while (px < width) : (px += 1) {
+            @set_tile_code(px, py, "pe.csl", .{
+                .memcpy_params = memcpy.get_params(px),
+                .KX        = KX,
+                .KY        = KY,
                 .TOTAL_NNZ = TOTAL_NNZ,
-                .MAX_ROWS = MAX_ROWS,
+                .WIDTH     = width,
+                .HEIGHT    = height,
             });
+
+            // Configure REDUCE_COLOR routing for east-to-west scan.
+            // Rightmost PE only sends; leftmost PE only receives.
+            // A single-column grid (width == 1) needs no routing.
+            const is_right: bool = (px == width - 1);
+            const is_left:  bool = (px == 0);
+
+            if (is_right and is_left) {
+                // width == 1: no reduction traffic
+                @set_color_config(px, py, REDUCE_COLOR, .{
+                    .routes = .{ .rx = .{}, .tx = .{} },
+                });
+            } else if (is_right) {
+                @set_color_config(px, py, REDUCE_COLOR, .{
+                    .routes = .{ .rx = .{}, .tx = .{WEST} },
+                });
+            } else if (is_left) {
+                @set_color_config(px, py, REDUCE_COLOR, .{
+                    .routes = .{ .rx = .{EAST}, .tx = .{} },
+                });
+            } else {
+                @set_color_config(px, py, REDUCE_COLOR, .{
+                    .routes = .{ .rx = .{EAST}, .tx = .{WEST} },
+                });
+            }
         }
     }
 
-    @export_name("row_offsets", [*]i32, true);
-    @export_name("num_rows", [*]i32, true);
-    @export_name("matrix_values", [*]f32, true);
-    @export_name("vector_values", [*]f32, true);
-    @export_name("results", [*]f32, false);
+    // H2D symbols (host writes to all PEs)
+    @export_name("x_vec",       [*]f32, true);
+    @export_name("a_values",    [*]f32, true);
+    @export_name("a_col_ids",   [*]i32, true);
+    @export_name("a_row_ptr",   [*]i32, true);
+
+    // D2H symbols (host reads from PEs)
+    // y_out: host downloads from column 0 only via memcpy_d2h(... x=0, width=1 ...)
+    // time_buf_f32: host reads from PE (0,0) for timing
+    @export_name("y_out",        [*]f32, false);
     @export_name("time_buf_f32", [*]f32, false);
+
     @export_name("spmv", fn()void);
 }

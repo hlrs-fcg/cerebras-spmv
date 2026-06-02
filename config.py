@@ -61,6 +61,16 @@ class SpMVConfig:
             self.max_rows_per_pe = self.rows // self.num_pes + 2
 
     @property
+    def kx(self) -> int:
+        """x elements per PE column = ceil(cols / width)."""
+        return (self.cols + self.width - 1) // self.width if self.cols > 0 else 1
+
+    @property
+    def ky(self) -> int:
+        """Rows per PE row = ceil(rows / height)."""
+        return (self.rows + self.height - 1) // self.height if self.rows > 0 else 1
+
+    @property
     def fabric_dims_str(self) -> str:
         return f"{self.fabric_dims[0]},{self.fabric_dims[1]}"
 

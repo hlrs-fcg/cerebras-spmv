@@ -1,138 +1,119 @@
-// pe.csl - SIMD optimized with DSDs (TYPE-FIXED)
+// pe.csl — SpMV with permanent x, 2D tiling, east-west reduction
+//
+// Each PE (px, py) owns:
+//   x_vec[KX]        — x slice for PE column px; loaded once, permanent across iterations
+//   a_values[TOTAL_NNZ] — A tile NNZ values (H2D per SpMV)
+//   a_col_ids[TOTAL_NNZ] — local column indices 0..KX-1 for x_vec lookup
+//   a_row_ptr[KY+1]  — CSR row pointers over local rows 0..KY
+//
+// After compute, partial_y is reduced east-to-west via REDUCE_COLOR.
+// Column-0 PEs write the complete y stripe to y_out; host downloads y_out
+// from a 1×HEIGHT rectangle (x=0).
 
 param memcpy_params;
-param TOTAL_NNZ: i16;
-param MAX_ROWS: i16;
+param KX:        i16;  // x elements per PE column  = ceil(cols / width)
+param KY:        i16;  // rows per PE row            = ceil(rows / height)
+param TOTAL_NNZ: i16;  // A tile buffer size (max NNZ per PE tile at compile time)
+param WIDTH:     i16;  // grid width  — used for role detection at comptime
+param HEIGHT:    i16;  // grid height — unused here, kept for symmetry
 
-const sys_mod = @import_module("<memcpy/memcpy>", memcpy_params);
+const sys_mod   = @import_module("<memcpy/memcpy>", memcpy_params);
 const timestamp = @import_module("<time>");
 
-var row_offsets = @zeros([MAX_ROWS + 1]i32);
-var num_rows = @zeros([1]i32);
-var matrix_values = @zeros([TOTAL_NNZ]f32);
-var vector_values = @zeros([TOTAL_NNZ]f32);
-var results = @zeros([MAX_ROWS]f32);
+const my_x: i16 = @get_id(.{ .dim = .x });
+const IS_RIGHT_COL: bool = (my_x == WIDTH - 1);
+const IS_LEFT_COL:  bool = (my_x == 0);
 
-var ptr_row_offsets: [*]i32 = &row_offsets;
-var ptr_num_rows: [*]i32 = &num_rows;
-var ptr_matrix_values: [*]f32 = &matrix_values;
-var ptr_vector_values: [*]f32 = &vector_values;
-const ptr_results: [*]f32 = &results;
+// --- SRAM ---
+var x_vec     = @zeros([KX]f32);
+var a_values  = @zeros([TOTAL_NNZ]f32);
+var a_col_ids = @zeros([TOTAL_NNZ]i32);  // i32 for 32-bit H2D compatibility
+var a_row_ptr = @zeros([KY + 1]i32);
+var partial_y = @zeros([KY]f32);
+var y_out     = @zeros([KY]f32);         // written only by column-0 PEs
 
-var tscStartBuffer = @zeros([timestamp.tsc_size_words]u16);
-var tscEndBuffer = @zeros([timestamp.tsc_size_words]u16);
-// Export as f32 (SDK requirement for calculate_cycles)
-// Each pair of u16 values encoded in f32 bit pattern
-var time_buf_f32 = @zeros([3]f32);
-const ptr_time_buf_f32: [*]f32 = &time_buf_f32;
+var tsc_start = @zeros([timestamp.tsc_size_words]u16);
+var tsc_end   = @zeros([timestamp.tsc_size_words]u16);
+var time_buf  = @zeros([3]f32);
 
-const CHUNK_SIZE: i32 = 32;
-var chunk_buffer = @zeros([32]f32);
+var ptr_x_vec:     [*]f32 = &x_vec;
+var ptr_a_values:  [*]f32 = &a_values;
+var ptr_a_col_ids: [*]i32 = &a_col_ids;
+var ptr_a_row_ptr: [*]i32 = &a_row_ptr;
+const ptr_y_out:   [*]f32 = &y_out;
+const ptr_time:    [*]f32 = &time_buf;
 
-// SIMD dot product: 8× f32/cycle with @fmuls
-fn dot_product_simd(start: i32, len: i32) f32 {
-    var total_sum: f32 = 0.0;
-    
-    const num_full_chunks = len / CHUNK_SIZE;
-    const remainder = len % CHUNK_SIZE;
+// --- Colors ---
+const REDUCE_COLOR: color = @get_color(1);
 
-    var chunk: i32 = 0;
-    while (chunk < num_full_chunks) : (chunk += 1) {
-        const offset = start + chunk * CHUNK_SIZE;
-
-        const mat_dsd = @get_dsd(mem1d_dsd, .{
-            .base_address = &matrix_values[offset],
-            .extent = 32
-        });
-        
-        const vec_dsd = @get_dsd(mem1d_dsd, .{
-            .base_address = &vector_values[offset],
-            .extent = 32
-        });
-        
-        const buf_dsd = @get_dsd(mem1d_dsd, .{
-            .base_address = &chunk_buffer,
-            .extent = 32
-        });
-
-        @fmuls(buf_dsd, mat_dsd, vec_dsd);
-
-        var chunk_sum: f32 = 0.0;
-        var i: i32 = 0;
-        while (i < 32) : (i += 1) {
-            chunk_sum += chunk_buffer[i];
-        }
-        total_sum += chunk_sum;
-    }
-
-    if (remainder > 0) {
-        const rem_start = start + num_full_chunks * CHUNK_SIZE;
-        var i: i32 = 0;
-        while (i < remainder) : (i += 1) {
-            total_sum += matrix_values[rem_start + i] * vector_values[rem_start + i];
-        }
-    }
-    
-    return total_sum;
-}
-
-fn dot_product_scalar(start: i32, len: i32) f32 {
-    var sum: f32 = 0.0;
-    var i: i32 = 0;
-    while (i < len) : (i += 1) {
-        sum += matrix_values[start + i] * vector_values[start + i];
-    }
-    return sum;
-}
-
+// --- Task IDs ---
 const compute_task_id: local_task_id = @get_local_task_id(10);
+const reduce_task_id:  local_task_id = @get_local_task_id(11);
 
-task compute_spmv() void {
+// --- Compute partial_y ---
+task compute() void {
     timestamp.enable_tsc();
+    timestamp.get_timestamp(&tsc_start);
 
-    const n_rows = num_rows[0];
-    const SIMD_THRESHOLD: i32 = 16;
-
-    timestamp.get_timestamp(&tscStartBuffer);
-
-    var r: i32 = 0;
-    while (r < n_rows) : (r += 1) {
-        const start = row_offsets[r];
-        const end = row_offsets[r + 1];
-        const row_len = end - start;
-
-        if (row_len == 0) {
-            results[r] = 0.0;
-        } else if (row_len < SIMD_THRESHOLD) {
-            results[r] = dot_product_scalar(start, row_len);
-        } else {
-            results[r] = dot_product_simd(start, row_len);
+    var r: i16 = 0;
+    while (r < KY) : (r += 1) {
+        var sum: f32 = 0.0;
+        var i: i32 = a_row_ptr[r];
+        const end: i32 = a_row_ptr[r + 1];
+        while (i < end) : (i += 1) {
+            sum += a_values[i] * x_vec[a_col_ids[i]];
         }
+        partial_y[r] = sum;
     }
 
-    timestamp.get_timestamp(&tscEndBuffer);
-    timestamp.disable_tsc();
+    @activate(reduce_task_id);
+}
 
-    // Pack timestamps into f32 array (SDK format for calculate_cycles)
-    // Each f32 contains 2 u16 values in its bit pattern
-    var tsc_buf_u16 = @zeros([6]u16);
-    tsc_buf_u16[0] = tscStartBuffer[0];
-    tsc_buf_u16[1] = tscStartBuffer[1];
-    tsc_buf_u16[2] = tscStartBuffer[2];
-    tsc_buf_u16[3] = tscEndBuffer[0];
-    tsc_buf_u16[4] = tscEndBuffer[1];
-    tsc_buf_u16[5] = tscEndBuffer[2];
+// --- East-west reduction ---
+// All PEs activate this task simultaneously after compute.
+// Blocking fabric receives serialize the scan from east to west automatically.
+task reduce() void {
+    const py_dsd = @get_dsd(mem1d_dsd, .{ .base_address = &partial_y, .extent = KY });
+    const yo_dsd = @get_dsd(mem1d_dsd, .{ .base_address = &y_out,     .extent = KY });
 
-    // Reinterpret pairs of u16 as u32, then as f32
-    var tsc_buf_u32 = @zeros([3]u32);
-    tsc_buf_u32[0] = (@as(u32, tsc_buf_u16[1]) << 16) | @as(u32, tsc_buf_u16[0]);
-    tsc_buf_u32[1] = (@as(u32, tsc_buf_u16[3]) << 16) | @as(u32, tsc_buf_u16[2]);
-    tsc_buf_u32[2] = (@as(u32, tsc_buf_u16[5]) << 16) | @as(u32, tsc_buf_u16[4]);
+    // Step 1: receive accumulated sum from eastern neighbour and add
+    //         (blocks until eastern PE sends; rightmost PE has no eastern neighbour)
+    if (!IS_RIGHT_COL) {
+        const east_in = @get_dsd(fabin_dsd, .{
+            .fabric_color = REDUCE_COLOR,
+            .extent       = KY,
+            .input_queue  = @get_input_queue(0),
+        });
+        @fadds(py_dsd, py_dsd, east_in);
+    }
 
-    // Bitcast u32 to f32
-    time_buf_f32[0] = @bitcast(f32, tsc_buf_u32[0]);
-    time_buf_f32[1] = @bitcast(f32, tsc_buf_u32[1]);
-    time_buf_f32[2] = @bitcast(f32, tsc_buf_u32[2]);
+    // Step 2: forward accumulated partial_y west
+    //         (leftmost PE has no western neighbour; it holds the complete stripe)
+    if (!IS_LEFT_COL) {
+        const west_out = @get_dsd(fabout_dsd, .{
+            .fabric_color = REDUCE_COLOR,
+            .extent       = KY,
+            .output_queue = @get_output_queue(0),
+        });
+        @fmovs(west_out, py_dsd);
+    }
+
+    // Step 3: column-0 PEs copy the complete y stripe to y_out and record timing
+    if (IS_LEFT_COL) {
+        @fmovs(yo_dsd, py_dsd);
+
+        timestamp.get_timestamp(&tsc_end);
+        timestamp.disable_tsc();
+
+        // Pack 3×u16 start + 3×u16 end into 3×f32 (SDK calculate_cycles format)
+        var s = @zeros([3]u32);
+        s[0] = (@as(u32, tsc_start[1]) << 16) | @as(u32, tsc_start[0]);
+        s[1] = (@as(u32, tsc_end[0])   << 16) | @as(u32, tsc_start[2]);
+        s[2] = (@as(u32, tsc_end[2])   << 16) | @as(u32, tsc_end[1]);
+        time_buf[0] = @bitcast(f32, s[0]);
+        time_buf[1] = @bitcast(f32, s[1]);
+        time_buf[2] = @bitcast(f32, s[2]);
+    }
 
     sys_mod.unblock_cmd_stream();
 }
@@ -142,12 +123,14 @@ fn spmv() void {
 }
 
 comptime {
-    @bind_local_task(compute_spmv, compute_task_id);
+    @bind_local_task(compute, compute_task_id);
+    @bind_local_task(reduce,  reduce_task_id);
+
+    @export_symbol(ptr_x_vec,     "x_vec");
+    @export_symbol(ptr_a_values,  "a_values");
+    @export_symbol(ptr_a_col_ids, "a_col_ids");
+    @export_symbol(ptr_a_row_ptr, "a_row_ptr");
+    @export_symbol(ptr_y_out,     "y_out");
+    @export_symbol(ptr_time,      "time_buf_f32");
     @export_symbol(spmv);
-    @export_symbol(ptr_row_offsets, "row_offsets");
-    @export_symbol(ptr_num_rows, "num_rows");
-    @export_symbol(ptr_matrix_values, "matrix_values");
-    @export_symbol(ptr_vector_values, "vector_values");
-    @export_symbol(ptr_results, "results");
-    @export_symbol(ptr_time_buf_f32, "time_buf_f32");
 }

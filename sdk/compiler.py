@@ -13,7 +13,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 def compile(cfg: SpMVConfig) -> None:
     """Compile CSL for cfg and save artifact.json. Sets cfg.artifact_id on success."""
     logger.info(f"Compiling for {cfg.width}×{cfg.height} grid ({cfg.num_pes:,} PEs)")
-    logger.info(f"  TOTAL_NNZ_PER_PE={cfg.total_nnz_per_pe}, MAX_ROWS_PER_PE={cfg.max_rows_per_pe}")
+    logger.info(f"  KX={cfg.kx}, KY={cfg.ky}, TOTAL_NNZ={cfg.total_nnz_per_pe}")
 
     cfg.out_path.mkdir(parents=True, exist_ok=True)
     out_path = str(cfg.out_path.resolve())
@@ -24,7 +24,7 @@ def compile(cfg: SpMVConfig) -> None:
         f"--memcpy --channels=1 "
         f"--arch={cfg.arch} "
         f"--params=width:{cfg.width},height:{cfg.height},"
-        f"TOTAL_NNZ:{cfg.total_nnz_per_pe},MAX_ROWS:{cfg.max_rows_per_pe}"
+        f"KX:{cfg.kx},KY:{cfg.ky},TOTAL_NNZ:{cfg.total_nnz_per_pe}"
     )
 
     from cerebras.sdk.client import SdkCompiler

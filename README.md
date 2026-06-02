@@ -13,10 +13,12 @@ Architecture decisions going forward are documented in [docs/adr/](docs/adr/).
 
 ```
 .
-├── bench/                  # BenchmarkResult dataclass and CSV I/O
+├── bench/
+│   ├── configs/            # TOML sweep configs (copy and edit to start a new sweep)
+│   └── benchmark.py        # BenchmarkResult dataclass and CSV I/O
 ├── cluster/
 │   ├── results/data/       # Benchmark CSVs from cluster runs
-│   ├── run_sweep.py        # Sweep orchestration (compile + run per config)
+│   ├── sweep_config.py     # TOML loading and sweep expansion
 │   └── worker_runtime.py   # Runs on the worker node via SdkLauncher
 ├── docs/adr/               # Architecture decision records
 ├── sdk/
@@ -28,22 +30,24 @@ Architecture decisions going forward are documented in [docs/adr/](docs/adr/).
 ├── utils/
 │   ├── matrix_generation.py
 │   └── validation.py
-├── compile.py              # Compile a single configuration on the login node
 ├── config.py               # SpMVConfig dataclass
-└── run.py                  # Run a compiled artifact on the worker node
+└── run.py                  # Entry point: single run or sweep
 ```
 
 ## Usage
 
-The workflow is: **compile on login node, run on worker node.**
-
 ```bash
-# Compile a single configuration
-uv run python compile.py --rows 10000 --cols 10000 --density 0.01
+# Single run
+uv run python run.py run --rows 10000 --cols 10000 --density 0.01
 
-# Run the compiled artifact
-uv run python run.py
+# Parameter sweep from a TOML config
+uv run python run.py sweep bench/configs/weak-scaling.toml
 
-# Run a parameter sweep from a CSV config
-uv run python cluster/run_sweep.py bench/configs/cluster/strong-scaling-large.csv
+# Resume a sweep from run index N
+uv run python run.py sweep bench/configs/weak-scaling.toml --start-index N
+
+# Run multiple sweep configs back to back
+uv run python run.py sweep bench/configs/weak-scaling.toml bench/configs/strong-scaling.toml
 ```
+
+Example sweep configs are in `bench/configs/`; copy one and edit to define a new sweep.
