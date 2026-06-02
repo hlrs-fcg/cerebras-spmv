@@ -38,6 +38,9 @@ class SpMVConfig:
     # set by sdk/compiler.compile() after CSL compilation
     artifact_id: str = field(init=False, default="")
 
+    # set by sdk/launcher.run() from the login-node repo before staging
+    git_commit: str = field(init=False, default="unknown")
+
     def __post_init__(self):
         max_w = self.fabric_dims[0] - self.fabric_offsets[0] - self.padding[0]
         max_h = self.fabric_dims[1] - self.fabric_offsets[1] - self.padding[1]
@@ -105,6 +108,8 @@ class SpMVConfig:
         cfg = cls(**kwargs)
         if "artifact_id" in d:
             object.__setattr__(cfg, "artifact_id", d["artifact_id"])
+        if "git_commit" in d:
+            object.__setattr__(cfg, "git_commit", d["git_commit"])
         return cfg
 
     def __str__(self) -> str:
