@@ -1,0 +1,20 @@
+[meta]
+name        = "sim-weak-scaling"
+description = "NNZ per PE held constant as PE count grows (weak scaling) — simulator"
+
+[output]
+work_dir = "cluster_work/sweeps/sim-weak-scaling"
+results  = "cluster/results/data/{date}_{name}.csv"
+
+[sweep]
+type       = "weak_scaling"
+simulator  = true
+density    = 0.01
+seed       = 42
+nnz_per_pe = 2000
+
+[sweep.num_pes]
+# 4096 = 64x64 is the largest power of two whose near-square grid stays inside
+# the simulator's 100-per-dimension cap (8192 would need 128x64).
+pow2_up_to        = 4096
+points_per_octave = 1

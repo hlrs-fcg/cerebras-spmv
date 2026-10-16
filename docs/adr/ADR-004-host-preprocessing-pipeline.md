@@ -1,6 +1,6 @@
 # ADR-004: Parallel Host Preprocessing Pipeline (CSR to Column Slices)
 
-**Status:** Accepted  
+**Status:** Accepted, amended 2026-10-08. v2.0: the host tiler is a fused numba / ahead-of-time kernel (`cluster/tile_kernels.py`, `docs/worker-numba.md`), 159 s to about 1 s at the full wafer  
 **Date:** 2026-05-31
 
 ## Context
@@ -54,3 +54,12 @@ Total wall time: ~0.6 ms (scatter) + ~2.1 ms (H2D) = **~2.7 ms** for 100 M NNZ.
 - Memory allocation: $64 \times W$ thread-local sub-buckets per scatter pass; at 100 M NNZ this is ~800 MB working set (acceptable on a worker node)
 - For matrices that fit on the wafer, Phase 1 runs once at startup; Phase 2 runs once; subsequent iterations only update $x$ (ADR-005)
 - Implementation: can prototype with `scipy.sparse.csr_matrix.tocsc()` (which implements exactly this scatter internally) and column iteration; replace with a parallel C extension or `numba.prange` for production throughput
+
+## Amendment (2026-10-08): the H2D side of the pipeline, measured
+
+The timing table assumed 220 GB/s H2D, so preprocessing looked like the bottleneck. Measured ceilings are 1.13 / 5.15 / 10.3 GB/s (1 / 8 / 16 channels, ADR-008): 20–200× below that assumption. Against the table's model, H2D is the larger step. Preprocessing as currently implemented is still a separate large cost, though: ~160 s at full fabric, with the parallel path not enabled. Both need work; neither hides the other.
+
+The transfer shape is part of this pipeline's output. The microbenchmarks (M1, M4) say:
+- Send each H2D as **many narrow rectangles** (k ≈ 2 × channels or more), **one after another**, not as one full rectangle (3.5× slower). Column mode (one 1-wide rect per PE column) is the SpMV's current form and is the fastest measured SpMV shape.
+- Splitting the same bytes into more calls makes them faster, not slower (M5). A per-call cost of 31–57 µs only matters below ~4 words per PE.
+- The setup copy (x, col_indices, row_ptrs, and valtask's `val_meta`) is still one full rectangle: 5.2 GB/s row-major, 6.75 GB/s col-major. Splitting it into strips should approach 10.3 GB/s. Not yet implemented.

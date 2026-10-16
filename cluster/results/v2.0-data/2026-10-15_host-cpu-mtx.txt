@@ -1,0 +1,38 @@
+node=<user node> Thu Oct 15 16:55:18 BST 2026
+host <user node>, 32 cores, numba threads 32, numpy 1.25.0
+
+nos6.mtx 675x675 (symmetric, 1,965 stored) nnz=3,255  COO->CSR one-time 0.6968 ms
+  per call = each call timed on its own (includes thread launch), median of 7 (min, max); steady = loop of N calls / N, median of 7 loops
+  numpy bincount fp64 COO (our validation ref)   per call     35.77 us (min     35.50 us, max     42.27 us)  steady     20.55 us (N=200)    0.32 GFLOP/s steady
+  scipy CSR fp32, 1 thread                       per call      7.38 us (min      7.01 us, max    176.04 us)  steady      5.70 us (N=200)    1.14 GFLOP/s steady
+  numba CSR fp32, 1 threads                      per call      7.74 us (min      7.59 us, max     45.87 us)  steady      7.52 us (N=200)    0.87 GFLOP/s steady
+  numba CSR fp32, 8 threads                      per call     30.24 us (min     18.40 us, max    335.11 us)  steady     13.46 us (N=200)    0.48 GFLOP/s steady
+  numba CSR fp32, 32 threads                     per call    3.3067 ms (min    1.7224 ms, max    5.0442 ms)  steady    3.5493 ms (N=10)    0.00 GFLOP/s steady
+  numba rel err 4.4e-08
+
+bcsstk01.mtx 48x48 (symmetric, 224 stored) nnz=400  COO->CSR one-time 1.3453 ms
+  per call = each call timed on its own (includes thread launch), median of 7 (min, max); steady = loop of N calls / N, median of 7 loops
+  numpy bincount fp64 COO (our validation ref)   per call     10.53 us (min     10.50 us, max     14.65 us)  steady      6.63 us (N=200)    0.12 GFLOP/s steady
+  scipy CSR fp32, 1 thread                       per call      4.92 us (min      4.54 us, max     71.33 us)  steady      3.29 us (N=200)    0.24 GFLOP/s steady
+  numba CSR fp32, 1 threads                      per call      3.86 us (min      3.53 us, max     18.55 us)  steady      2.02 us (N=200)    0.40 GFLOP/s steady
+  numba CSR fp32, 8 threads                      per call      9.83 us (min      7.59 us, max    253.62 us)  steady      8.51 us (N=200)    0.09 GFLOP/s steady
+  numba CSR fp32, 32 threads                     per call    3.4092 ms (min    1.8899 ms, max    4.9837 ms)  steady    3.4274 ms (N=10)    0.00 GFLOP/s steady
+  numba rel err 4.5e-08
+
+bcsstk14.mtx 1806x1806 (symmetric, 32,630 stored) nnz=63,454  COO->CSR one-time 0.6381 ms
+  per call = each call timed on its own (includes thread launch), median of 7 (min, max); steady = loop of N calls / N, median of 7 loops
+  numpy bincount fp64 COO (our validation ref)   per call    528.54 us (min    350.71 us, max    588.15 us)  steady    357.26 us (N=200)    0.36 GFLOP/s steady
+  scipy CSR fp32, 1 thread                       per call     58.47 us (min     56.67 us, max    245.80 us)  steady     57.13 us (N=200)    2.22 GFLOP/s steady
+  numba CSR fp32, 1 threads                      per call    173.58 us (min    172.81 us, max    249.36 us)  steady    172.42 us (N=200)    0.74 GFLOP/s steady
+  numba CSR fp32, 8 threads                      per call    146.92 us (min    126.36 us, max    639.61 us)  steady     36.17 us (N=200)    3.51 GFLOP/s steady
+  numba CSR fp32, 32 threads                     per call    3.3466 ms (min    3.2817 ms, max    3.7542 ms)  steady    3.5448 ms (N=10)    0.04 GFLOP/s steady
+  numba rel err 8.9e-08
+
+parabolic_fem.mtx 525825x525825 (symmetric, 2,100,225 stored) nnz=3,674,625  COO->CSR one-time 38.7663 ms
+  per call = each call timed on its own (includes thread launch), median of 7 (min, max); steady = loop of N calls / N, median of 7 loops
+  numpy bincount fp64 COO (our validation ref)   per call   68.2019 ms (min   66.3359 ms, max   69.0533 ms)  steady   73.7480 ms (N=10)    0.10 GFLOP/s steady
+  scipy CSR fp32, 1 thread                       per call    4.4833 ms (min    3.9369 ms, max    7.4161 ms)  steady    4.0274 ms (N=10)    1.82 GFLOP/s steady
+  numba CSR fp32, 1 threads                      per call    6.7205 ms (min    6.4212 ms, max    7.0975 ms)  steady    6.6086 ms (N=10)    1.11 GFLOP/s steady
+  numba CSR fp32, 8 threads                      per call    2.3984 ms (min    1.5627 ms, max    6.4065 ms)  steady    1.5549 ms (N=10)    4.73 GFLOP/s steady
+  numba CSR fp32, 32 threads                     per call    4.1671 ms (min    4.0958 ms, max    5.6615 ms)  steady    4.1571 ms (N=10)    1.77 GFLOP/s steady
+  numba rel err 7.7e-08

@@ -1,0 +1,55 @@
+[meta]
+name        = "sim-resident"
+description = """
+A resident on the wafer (src/csl/pe_resident.csl, docs/resident-spmv.md) in the simulator:
+the 16-PE smoke, then two small grids, synced timing, 20 passes each.
+
+Run this before any hardware job.  The simulator checks that the kernel compiles, that the
+setup copy lands vals/col_indices/row_ptrs where the kernel reads them, that spmv() holds the
+command stream until the EW chain is done (f_toc stamps behind it), and that 20 passes
+all validate.  It cannot say how fast anything is, and it does not reproduce
+the concurrency hangs that only happen on hardware.
+"""
+
+[output]
+work_dir = "cluster_work/sweeps/sim-resident"
+results  = "cluster/results/data/{date}_{name}.csv"
+
+[[run]]
+rows           = 1_000
+cols           = 1_000
+density        = 0.01
+seed           = 42
+num_pes_target = 16
+simulator      = true
+encoding       = "resident"
+sync_timing    = true
+loop_count     = 20
+out_path       = "cluster_work/sweeps/sim-resident"
+comment        = "resident smoke: 16 PEs (4x4), expect rel_err ~5e-8, every pass PASSED"
+
+[[run]]
+rows           = 4_000
+cols           = 4_000
+density        = 0.01
+seed           = 42
+num_pes_target = 256
+simulator      = true
+encoding       = "resident"
+sync_timing    = true
+loop_count     = 20
+out_path       = "cluster_work/sweeps/sim-resident"
+comment        = "resident: 256 PEs (16x16), ~625 NNZ/PE"
+
+[[run]]
+rows           = 2_000
+cols           = 2_000
+density        = 0.01
+seed           = 42
+num_pes_target = 64
+simulator      = true
+encoding       = "resident"
+sync_timing    = true
+loop_count     = 20
+out_path       = "cluster_work/sweeps/sim-resident"
+comment        = "resident: 64 PEs (8x8), x set once at setup"

@@ -7,13 +7,16 @@ authors = [
 	{name = "Daniel Renschler", email = "renschler@hlrs.de"},
 ]
 
-version = "0.1.0"
+version = "2.0.0"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11"
 dependencies = [
     "cerebras-sdk==2.10.0; sys_platform == 'linux'",
     "loguru>=0.7.3",
     "numpy",
+    "numba",
     "scipy",
 ]
 

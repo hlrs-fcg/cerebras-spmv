@@ -1,0 +1,85 @@
+[meta]
+name        = "h2d-shape-channels"
+description = """
+Two-factor H2D experiment: transfer shape x I/O channels, at a fixed 65,536 PEs.
+
+Separates the two explanations for the ~1.3-1.5 GB/s host->wafer ceiling that
+bounds every timing recorded so far (docs/streaming-rewrite-status.md):
+
+  (a) a genuine interface/link limit, in which case no shape or channel count
+      moves it, and streaming A every CG iteration is simply off the table; or
+  (b) an artifact of transfer SHAPE, in which case the monotone degradation of
+      the first channels sweep (39.4 ms at 1 channel -> 62-64 ms at 8-16) is
+      explained by 'column' mode issuing W one-column-wide rectangles, and a
+      one-column transfer having nothing for extra channels to parallelise.
+
+The crossing is what distinguishes them.  'column' x channels reproduces the
+known degradation; 'full' x channels is the same bytes in one wide rectangle,
+the shape the hardware can actually spread over channels.  If 'full' scales
+with channels, the ceiling was shape; if it degrades identically, the ceiling
+is the link.
+
+Fixed point: 114,000^2 @ d=1e-3 = 12,996,000 NNZ on a 256x256 grid.  Identical
+to the matrix and PE count of the first channels sweep, so the channels=1 /
+column row is a direct reproduction of the recorded 39.398 ms and acts as the
+comparability check for the whole table.  Run it first.
+
+channels is compile-time (reaches cslc) and h2d_mode is runtime (reaches the
+worker), so all four points need their own compile: budget ~70 s each.
+"""
+
+[output]
+work_dir = "cluster_work/sweeps/h2d-shape-channels"
+results  = "cluster/results/data/{date}_{name}.csv"
+
+# Explicit runs rather than a [sweep] block: a sweep varies one factor, and the
+# whole point here is the cross.  Each row states both factors so the CSV is
+# self-documenting even if read without this file.
+
+# --- baseline: reproduces the recorded 39.398 ms. Comparability check. ---
+[[run]]
+rows           = 114_000
+cols           = 114_000
+density        = 0.001
+seed           = 42
+num_pes_target = 65_536
+channels       = 1
+h2d_mode       = "column"
+out_path       = "cluster_work/sweeps/h2d-shape-channels"
+comment        = "h2d-shape x channels: column/1 (baseline, expect ~39.4 ms, rel_err 1.49e-07)"
+
+# --- new shape, one channel: isolates the cost of padding alone. ---
+[[run]]
+rows           = 114_000
+cols           = 114_000
+density        = 0.001
+seed           = 42
+num_pes_target = 65_536
+channels       = 1
+h2d_mode       = "full"
+out_path       = "cluster_work/sweeps/h2d-shape-channels"
+comment        = "h2d-shape x channels: full/1 (padding cost at one channel)"
+
+# --- known-bad corner: reproduces the +58% degradation. ---
+[[run]]
+rows           = 114_000
+cols           = 114_000
+density        = 0.001
+seed           = 42
+num_pes_target = 65_536
+channels       = 8
+h2d_mode       = "column"
+out_path       = "cluster_work/sweeps/h2d-shape-channels"
+comment        = "h2d-shape x channels: column/8 (expect ~62.2 ms, the +58% degradation)"
+
+# --- the point the experiment exists for. ---
+[[run]]
+rows           = 114_000
+cols           = 114_000
+density        = 0.001
+seed           = 42
+num_pes_target = 65_536
+channels       = 8
+h2d_mode       = "full"
+out_path       = "cluster_work/sweeps/h2d-shape-channels"
+comment        = "h2d-shape x channels: full/8 (the decisive point: shape or link?)"

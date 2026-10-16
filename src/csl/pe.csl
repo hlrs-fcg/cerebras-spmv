@@ -1,136 +1,324 @@
-// pe.csl — SpMV with permanent x, 2D tiling, east-west reduction
-//
-// Each PE (px, py) owns:
-//   x_vec[KX]        — x slice for PE column px; loaded once, permanent across iterations
-//   a_values[TOTAL_NNZ] — A tile NNZ values (H2D per SpMV)
-//   a_col_ids[TOTAL_NNZ] — local column indices 0..KX-1 for x_vec lookup
-//   a_row_ptr[KY+1]  — CSR row pointers over local rows 0..KY
-//
-// After compute, partial_y is reduced east-to-west via REDUCE_COLOR.
-// Column-0 PEs write the complete y stripe to y_out; host downloads y_out
-// from a 1×HEIGHT rectangle (x=0).
-
 param memcpy_params;
-param KX:        i16;  // x elements per PE column  = ceil(cols / width)
-param KY:        i16;  // rows per PE row            = ceil(rows / height)
-param TOTAL_NNZ: i16;  // A tile buffer size (max NNZ per PE tile at compile time)
-param WIDTH:     i16;  // grid width  — used for role detection at comptime
-param HEIGHT:    i16;  // grid height — unused here, kept for symmetry
+param KX:        i32;
+param KY:        i32;
+param TOTAL_NNZ: i32;
+param EW_TX_COLOR: color;
+param EW_RX_COLOR: color;
+param EW_ENABLED: i32;
+param W:         i16;
+param MY_X:      i16;
+param SYNC_TIMING: i16;
+// Sync module routing and task ids, computed per PE in layout.csl.  Flat params:
+// SDK 2.10.0 removed comptime_struct and @concat_structs.
+param c_recv_px: color;
+param c_send_px: color;
+param c_recv_py: color;
+param c_send_py: color;
+param c_bcast: color;
+param STARTUP: local_task_id;
+param SYNC_Y: local_task_id;
+param SYNC_BCAST: local_task_id;
+param EXIT: local_task_id;
+param first_px: bool;
+param last_px: bool;
+param first_py: bool;
+param last_py: bool;
 
-const sys_mod   = @import_module("<memcpy/memcpy>", memcpy_params);
-const timestamp = @import_module("<time>");
+const sys_mod = @import_module("<memcpy/memcpy>", memcpy_params);
 
-const my_x: i16 = @get_id(.{ .dim = .x });
-const IS_RIGHT_COL: bool = (my_x == WIDTH - 1);
-const IS_LEFT_COL:  bool = (my_x == 0);
+// Hardware cycle counter (tsc_size_words == 3, i.e. a 48-bit count in 3 u16).
+const tsc = @import_module("<time>");
 
-// --- SRAM ---
-var x_vec     = @zeros([KX]f32);
-var a_values  = @zeros([TOTAL_NNZ]f32);
-var a_col_ids = @zeros([TOTAL_NNZ]i32);  // i32 for 32-bit H2D compatibility
-var a_row_ptr = @zeros([KY + 1]i32);
-var partial_y = @zeros([KY]f32);
-var y_out     = @zeros([KY]f32);         // written only by column-0 PEs
-
-var tsc_start = @zeros([timestamp.tsc_size_words]u16);
-var tsc_end   = @zeros([timestamp.tsc_size_words]u16);
-var time_buf  = @zeros([3]f32);
-
-var ptr_x_vec:     [*]f32 = &x_vec;
-var ptr_a_values:  [*]f32 = &a_values;
-var ptr_a_col_ids: [*]i32 = &a_col_ids;
-var ptr_a_row_ptr: [*]i32 = &a_row_ptr;
-const ptr_y_out:   [*]f32 = &y_out;
-const ptr_time:    [*]f32 = &time_buf;
-
-// --- Colors ---
-const REDUCE_COLOR: color = @get_color(1);
-
-// --- Task IDs ---
-const compute_task_id: local_task_id = @get_local_task_id(10);
-const reduce_task_id:  local_task_id = @get_local_task_id(11);
-
-// --- Compute partial_y ---
-task compute() void {
-    timestamp.enable_tsc();
-    timestamp.get_timestamp(&tsc_start);
-
-    var r: i16 = 0;
-    while (r < KY) : (r += 1) {
-        var sum: f32 = 0.0;
-        var i: i32 = a_row_ptr[r];
-        const end: i32 = a_row_ptr[r + 1];
-        while (i < end) : (i += 1) {
-            sum += a_values[i] * x_vec[a_col_ids[i]];
-        }
-        partial_y[r] = sum;
+// ── Synced on-wafer timing (docs/synced-timing.md) ─────────────────
+// SYNC_TIMING == 1 runs the csl-examples bandwidth-test pattern around each
+// pass: the host calls f_sync ONCE (all PEs sample a common reference clock),
+// then per pass f_tic -> spmv / stream / wait_ew -> f_toc, and reads sync_pack.
+// The tsc must then free-run for the whole program: the sync module enables it
+// at startup and nothing below may disable or re-enable it, or the reference
+// clock stops meaning anything.  SYNC_TIMING == 0: the module is inert (no
+// binds, routes or startup task) and none of this is exported.
+// Queues 3,4,5 are clear of the H2D stream (2) and EW (6).
+// The sync module is imported only when SYNC_TIMING == 1: with 0 the stub
+// sync/pe_off.csl stands in, so a problem in the sync module can never reach the
+// normal kernels.  (csl-examples selects a module path the same way.)
+fn sync_pe_file() comptime_string {
+    if (SYNC_TIMING == 1) {
+        return "sync/pe.csl";
+    } else {
+        return "sync/pe_off.csl";
     }
-
-    @activate(reduce_task_id);
 }
 
-// --- East-west reduction ---
-// All PEs activate this task simultaneously after compute.
-// Blocking fabric receives serialize the scan from east to west automatically.
-task reduce() void {
-    const py_dsd = @get_dsd(mem1d_dsd, .{ .base_address = &partial_y, .extent = KY });
-    const yo_dsd = @get_dsd(mem1d_dsd, .{ .base_address = &y_out,     .extent = KY });
+const sync_mod = @import_module(sync_pe_file(), .{
+    .c_recv_px = c_recv_px,
+    .c_send_px = c_send_px,
+    .c_recv_py = c_recv_py,
+    .c_send_py = c_send_py,
+    .c_bcast = c_bcast,
+    .STARTUP = STARTUP,
+    .SYNC_Y = SYNC_Y,
+    .SYNC_BCAST = SYNC_BCAST,
+    .EXIT = EXIT,
+    .first_px = first_px,
+    .last_px = last_px,
+    .first_py = first_py,
+    .last_py = last_py,
+    .f_callback    = sys_mod.unblock_cmd_stream,
+    .input_queues  = [3]u16{3, 4, 5},
+    .output_queues = [3]u16{3, 4, 5},
+    .enabled       = SYNC_TIMING == 1,
+});
 
-    // Step 1: receive accumulated sum from eastern neighbour and add
-    //         (blocks until eastern PE sends; rightmost PE has no eastern neighbour)
-    if (!IS_RIGHT_COL) {
-        const east_in = @get_dsd(fabin_dsd, .{
-            .fabric_color = REDUCE_COLOR,
-            .extent       = KY,
-            .input_queue  = @get_input_queue(0),
-        });
-        @fadds(py_dsd, py_dsd, east_in);
-    }
+var tsc_tic   = @zeros([tsc.tsc_size_words]u16);
+var tsc_toc   = @zeros([tsc.tsc_size_words]u16);
+// [0..2] = {tic, toc} in tsc_pack's bit layout; [3..4] = the sync module's
+// reference clock, packed as bandwidth-test's time_ref ({ref[1],ref[0]}, {0,ref[2]}).
+var sync_pack = @zeros([5]f32);
+const ptr_sync_pack: [*]f32 = &sync_pack;
 
-    // Step 2: forward accumulated partial_y west
-    //         (leftmost PE has no western neighbour; it holds the complete stripe)
-    if (!IS_LEFT_COL) {
-        const west_out = @get_dsd(fabout_dsd, .{
-            .fabric_color = REDUCE_COLOR,
-            .extent       = KY,
-            .output_queue = @get_output_queue(0),
-        });
-        @fmovs(west_out, py_dsd);
-    }
+fn f_sync() void {
+    sync_mod.f_sync();   // releases the command stream itself, once synced
+}
 
-    // Step 3: column-0 PEs copy the complete y stripe to y_out and record timing
-    if (IS_LEFT_COL) {
-        @fmovs(yo_dsd, py_dsd);
-
-        timestamp.get_timestamp(&tsc_end);
-        timestamp.disable_tsc();
-
-        // Pack 3×u16 start + 3×u16 end into 3×f32 (SDK calculate_cycles format)
-        var s = @zeros([3]u32);
-        s[0] = (@as(u32, tsc_start[1]) << 16) | @as(u32, tsc_start[0]);
-        s[1] = (@as(u32, tsc_end[0])   << 16) | @as(u32, tsc_start[2]);
-        s[2] = (@as(u32, tsc_end[2])   << 16) | @as(u32, tsc_end[1]);
-        time_buf[0] = @bitcast(f32, s[0]);
-        time_buf[1] = @bitcast(f32, s[1]);
-        time_buf[2] = @bitcast(f32, s[2]);
-    }
-
+fn f_tic() void {
+    tsc.get_timestamp(&tsc_tic);
     sys_mod.unblock_cmd_stream();
 }
 
+fn f_toc() void {
+    tsc.get_timestamp(&tsc_toc);
+    sync_pack[0] = @bitcast(f32, (@as(u32, tsc_tic[1]) << @as(u16, 16)) | @as(u32, tsc_tic[0]));
+    sync_pack[1] = @bitcast(f32, (@as(u32, tsc_toc[0]) << @as(u16, 16)) | @as(u32, tsc_tic[2]));
+    sync_pack[2] = @bitcast(f32, (@as(u32, tsc_toc[2]) << @as(u16, 16)) | @as(u32, tsc_toc[1]));
+    sync_pack[3] = @bitcast(f32, (@as(u32, sync_mod.tscRefBuffer[1]) << @as(u16, 16))
+                                 | @as(u32, sync_mod.tscRefBuffer[0]));
+    sync_pack[4] = @bitcast(f32, @as(u32, sync_mod.tscRefBuffer[2]));
+    sys_mod.unblock_cmd_stream();
+}
+
+const my_x: i16 = MY_X;
+
+// EW reduction queues (port 6, unchanged)
+const ew_iq = @get_input_queue(6);
+const ew_oq = @get_output_queue(6);
+
+// Streaming H2D data task (port 2, WSE-3)
+const h2d_iq: input_queue = @get_input_queue(2);
+const stream_task_id: data_task_id = @get_data_task_id(h2d_iq);
+
+// Permanent per-PE buffers (loaded once at setup)
+var x_vec       = @zeros([KX]f32);
+var col_indices = @zeros([TOTAL_NNZ]i32);
+var row_ptrs    = @zeros([KY + 1]i32);
+
+// Accumulators
+var y_result = @zeros([KY]f32);
+var ew_buf   = @zeros([KY]f32);
+
+// Per-PE cycle timestamps.  tsc_start is stamped on the FIRST streamed A word
+// to reach this PE; tsc_end when this PE's EW chain finishes (chain_done).  The
+// span end-start therefore covers stream consumption + the EW reduction and
+// INCLUDES time spent waiting between wavelets (H2D stalls) and the skew from
+// the host streaming grid columns one after another — it is not pure on-wafer
+// compute.  chain_done packs the two 48-bit counts into tsc_pack (3 x f32) so
+// the host reads them over the same 32-bit D2H path as every other transfer
+// here — the single-tile-matvec benchmark's bit layout.
+// SRAM added per PE: 3+3 u16 scratch + 3 f32 packed + 1 bool = 25 bytes.
+var tsc_start = @zeros([tsc.tsc_size_words]u16);
+var tsc_end   = @zeros([tsc.tsc_size_words]u16);
+var tsc_pack  = @zeros([3]f32);
+var tsc_armed: bool = true;   // next non-drained stream word records tsc_start
+
+// Host-visible pointers
+var ptr_x_vec:        [*]f32 = &x_vec;
+var ptr_col_indices:  [*]i32 = &col_indices;
+var ptr_row_ptrs:     [*]i32 = &row_ptrs;
+const ptr_y_result:   [*]f32 = &y_result;
+const ptr_tsc_pack:   [*]f32 = &tsc_pack;
+
+// Streaming state machine (reset each pass by spmv())
+var state:     i16  = 0;     // 0 = awaiting header, 1 = consuming values
+var cur_row:   i32  = 0;
+var remaining: u16  = 0;     // u16: the header count field is unsigned 16-bit
+var ci:        i32  = 0;     // cursor into col_indices
+var draining:  bool = true;  // sentinel seen: swallow the rest of the transfer
+
+// EW/command-stream handshake.  The host issues launch("spmv") → streaming
+// H2D → launch("wait_ew").  spmv() releases the command stream at once so the
+// stream that carries the sentinel is not queued behind it; wait_ew() then
+// re-blocks the command stream until this pass's EW chain has finished.
+// Either order is possible, so both sides are recorded:
+var ew_done:      bool = false;  // chain_done already fired for this pass
+var wait_pending: bool = false;  // wait_ew ran first and is waiting on it
+
+// EW DSDs
+const mem_ew = @get_dsd(mem1d_dsd, .{
+    .tensor_access = |i|{KY} -> ew_buf[i],
+});
+const mem_y = @get_dsd(mem1d_dsd, .{
+    .tensor_access = |i|{KY} -> y_result[i],
+});
+const send_ew = @get_dsd(fabout_dsd, .{
+    .extent = KY,
+    .output_queue = ew_oq,
+});
+const recv_ew = @get_dsd(fabin_dsd, .{
+    .extent = KY,
+    .input_queue = ew_iq,
+});
+
+const ew_start_task_id: local_task_id = @get_local_task_id(10);
+const done_task_id:     local_task_id = @get_local_task_id(11);
+
+// Fires once per arriving word from the streaming H2D channel.
+//
+// The host writes an explicit 0 terminator after each PE's words, so word == 0
+// in state 0 is always end-of-stream: a header is never 0 (every encoded row
+// has count >= 1, so headers are >= 0x00010000) and a +0.0f value word only
+// ever arrives in state 1, where the sentinel is not tested.
+task stream_word(word: u32) void {
+    // Trailing padding.  A rectangle memcpy sends the same word count to every
+    // PE it covers, so a PE whose stream is shorter than its column's transfer
+    // still receives the difference.  Swallow those words rather than blocking
+    // the task: unconsumed wavelets would backpressure the fabric so the
+    // transfer never retires, and any that did survive would be misread as a
+    // header on the next pass.
+    if (draining) { return; }
+    if (tsc_armed) {
+        // First real word of this pass reaches this PE: start the span.
+        tsc_armed = false;
+        tsc.get_timestamp(&tsc_start);
+    }
+    if (state == 0) {
+        if (word == 0) {               // sentinel: end of stream
+            draining = true;
+            @activate(ew_start_task_id);
+            return;
+        }
+        cur_row   = @as(i32, word & 0xFFFF);
+        remaining = @as(u16, (word >> 16) & 0xFFFF);
+        ci        = row_ptrs[cur_row];
+        state     = 1;
+    } else {
+        y_result[cur_row] += @bitcast(f32, word) * x_vec[col_indices[ci]];
+        ci        += 1;
+        remaining -= 1;
+        if (remaining == 0) { state = 0; }
+    }
+}
+
+// EW reduction chain — activated when sentinel is seen in stream_word
+task ew_start() void {
+    if (EW_ENABLED == 0 or W == 1) {
+        @activate(done_task_id);   // nothing to reduce — same handshake
+    } else {
+        var k: i32 = 0;
+        while (k < KY) : (k += 1) {
+            ew_buf[k] = y_result[k];
+        }
+        if (my_x == W - 1) {
+            @fmovs(send_ew, mem_ew, .{.async = true, .activate = done_task_id});
+        } else if (my_x == 0) {
+            @fadds(mem_y, mem_ew, recv_ew, .{.async = true, .activate = done_task_id});
+        } else {
+            @fadds(send_ew, mem_ew, recv_ew, .{.async = true, .activate = done_task_id});
+        }
+    }
+}
+
+task chain_done() void {
+    // End of on-wafer work for this PE: EW chain (or the W==1 short-circuit) done.
+    tsc.get_timestamp(&tsc_end);
+    if (SYNC_TIMING == 0) {
+        tsc.disable_tsc();   // under SYNC_TIMING the tsc free-runs (see above)
+    }
+
+    // Pack {tsc_start[0:3], tsc_end[0:3]} u16 words into 3 f32 (bit layout from
+    // csl-examples/benchmarks/single-tile-matvec): the host masks each half and
+    // rebuilds the two 48-bit counts.
+    tsc_pack[0] = @bitcast(f32, (@as(u32, tsc_start[1]) << @as(u16, 16)) | @as(u32, tsc_start[0]));
+    tsc_pack[1] = @bitcast(f32, (@as(u32, tsc_end[0])   << @as(u16, 16)) | @as(u32, tsc_start[2]));
+    tsc_pack[2] = @bitcast(f32, (@as(u32, tsc_end[2])   << @as(u16, 16)) | @as(u32, tsc_end[1]));
+
+    ew_done = true;
+    if (wait_pending) {
+        wait_pending = false;
+        sys_mod.unblock_cmd_stream();   // wait_ew got here first; release it
+    }
+}
+
+// Per-pass entry point: clear the accumulator, reset the state machine, and
+// re-enable the data task.
 fn spmv() void {
-    @activate(compute_task_id);
+    // Clear all KY entries, not just the rows that appear in the stream.  A row
+    // with no NNZ in this tile never gets a header, and the EW @fadds in
+    // ew_start writes every y_result entry on column-0 PEs, so an uncleared
+    // empty row would carry the previous pass's reduced value into this one.
+    var k: i32 = 0;
+    while (k < KY) : (k += 1) {
+        y_result[k] = 0.0;
+    }
+
+    state = 0;  cur_row = 0;  remaining = 0;  ci = 0;
+    draining     = false;
+    ew_done      = false;
+    wait_pending = false;
+
+    // Arm the cycle counter for this pass.  enable_tsc() is idempotent and
+    // chain_done() disables it again; tsc_armed makes the first non-drained
+    // stream word stamp tsc_start.
+    if (SYNC_TIMING == 0) {
+        tsc.enable_tsc();   // under SYNC_TIMING the sync module enabled it at startup
+    }
+    tsc_armed = true;
+
+    @unblock(stream_task_id);
+
+    // Release the command stream immediately.  The streaming H2D carrying this
+    // pass's words — including the sentinel that ends it — is the next command
+    // behind this one; holding the command stream here would queue the stream
+    // behind the very thing that waits for it.
+    sys_mod.unblock_cmd_stream();
+}
+
+// Per-pass barrier: the host runs this with nonblock=False after the streaming
+// H2D, and stays blocked until this PE's EW chain has completed.
+fn wait_ew() void {
+    if (ew_done) {
+        sys_mod.unblock_cmd_stream();   // already finished; do not block
+    } else {
+        wait_pending = true;            // chain_done will release us
+    }
 }
 
 comptime {
-    @bind_local_task(compute, compute_task_id);
-    @bind_local_task(reduce,  reduce_task_id);
+    @bind_data_task(stream_word, stream_task_id);
+    @block(stream_task_id);  // start blocked; spmv() unblocks each pass
+    @initialize_queue(h2d_iq, .{ .color = @get_color(sys_mod.MEMCPYH2D_1) });
 
-    @export_symbol(ptr_x_vec,     "x_vec");
-    @export_symbol(ptr_a_values,  "a_values");
-    @export_symbol(ptr_a_col_ids, "a_col_ids");
-    @export_symbol(ptr_a_row_ptr, "a_row_ptr");
-    @export_symbol(ptr_y_out,     "y_out");
-    @export_symbol(ptr_time,      "time_buf_f32");
+    @bind_local_task(ew_start, ew_start_task_id);
+    @bind_local_task(chain_done, done_task_id);
+
+    // Alternating color scheme: each PE calls @set_color_config once per color
+    if ((MY_X % 2) == 0) {
+        @initialize_queue(ew_oq, .{.color = EW_TX_COLOR});
+        @initialize_queue(ew_iq, .{.color = EW_RX_COLOR});
+    } else {
+        @initialize_queue(ew_oq, .{.color = EW_RX_COLOR});
+        @initialize_queue(ew_iq, .{.color = EW_TX_COLOR});
+    }
+
+    @export_symbol(ptr_x_vec,       "x_vec");
+    @export_symbol(ptr_col_indices, "col_indices");
+    @export_symbol(ptr_row_ptrs,    "row_ptrs");
+    @export_symbol(ptr_y_result,    "y_result");
+    @export_symbol(ptr_tsc_pack,    "tsc_pack");
     @export_symbol(spmv);
+    @export_symbol(wait_ew);
+    if (SYNC_TIMING == 1) {
+        @export_symbol(ptr_sync_pack, "sync_pack");
+        @export_symbol(f_sync);
+        @export_symbol(f_tic);
+        @export_symbol(f_toc);
+    }
 }

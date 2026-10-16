@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "commit_full": "$Format:%H$",
+  "describe": "$Format:%(describe:tags)$",
+  "dirty": false
+}

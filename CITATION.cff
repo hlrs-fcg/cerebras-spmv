@@ -1,0 +1,62 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+type: software
+title: "Cerebras SpMV: sparse matrix-vector multiplication on the Cerebras Wafer-Scale Engine"
+abstract: >-
+  Sparse matrix-vector multiplication (SpMV) for the Cerebras Wafer-Scale
+  Engine (WSE-3), written in CSL with a Python host pipeline. The matrix is
+  tiled across the processing-element grid and kept resident in on-wafer
+  memory, so repeated SpMVs (as in Krylov solvers such as CG) run without
+  re-streaming the matrix. Includes the host tiling pipeline, a streaming
+  variant for comparison, the benchmark harness used for the reported
+  results, and the v2.0 release-candidate measurements (cluster/results/v2.0-data)
+  with the notebook that compares v1.0 and v2.0 (analysis/v1_vs_v2.ipynb).
+authors:
+  - family-names: Renschler
+    given-names: Daniel
+    affiliation: "High-Performance Computing Center Stuttgart (HLRS), University of Stuttgart; Karlsruhe Institute of Technology (KIT)"
+    orcid: "https://orcid.org/0009-0003-5281-1577"
+repository-code: "https://github.com/hlrs-fcg/cerebras-spmv"
+license: Apache-2.0
+version: "2.0.0"
+# date-released: set on the day you tag v2.0 (YYYY-MM-DD)
+# doi: added after Zenodo mints the version DOI (or use the concept DOI here)
+keywords:
+  - sparse matrix-vector multiplication
+  - SpMV
+  - Cerebras
+  - wafer-scale engine
+  - WSE-3
+  - CSL
+  - conjugate gradient
+  - HPC
+# Uncomment once the paper is accepted, so GitHub's "Cite this repository"
+# points readers at the paper rather than the software record.
+# preferred-citation:
+#   type: conference-paper
+#   title: "..."
+#   authors:
+#     - family-names: Renschler
+#       given-names: Daniel
+#   collection-title: "..."
+#   year: 2027
+#   doi: "..."
+references:
+  - type: conference-paper
+    title: "SpMV for the Cerebras Wafer-Scale Engine"
+    authors:
+      - family-names: Renschler
+        given-names: Daniel
+        affiliation: "HLRS, University of Stuttgart; Karlsruhe Institute of Technology (KIT)"
+      - family-names: Schäfer
+        given-names: Jonathan
+        affiliation: "HLRS, University of Stuttgart"
+      - family-names: Gebert
+        given-names: Johannes
+        affiliation: "HLRS, University of Stuttgart"
+      - family-names: Parsons
+        given-names: Mark
+        affiliation: "EPCC, The University of Edinburgh"
+    collection-title: "ISC High Performance 2026"
+    year: 2026
+    notes: "Research poster; presents v1.0 of this software (https://github.com/hlrs-fcg/cerebras-spmv/releases/tag/v1.0)"

@@ -1,0 +1,29 @@
+[meta]
+name        = "sim-strong-scaling"
+description = "Fixed matrix size, varying PE count (strong scaling) — simulator"
+
+[output]
+work_dir = "cluster_work/sweeps/sim-strong-scaling"
+results  = "cluster/results/data/{date}_{name}.csv"
+
+[sweep]
+type      = "strong_scaling"
+simulator = true
+# 12_500^2 at d=1e-3 is ~1.56e5 NNZ.  Strong scaling is bound by its *smallest*
+# PE count: at 64 PEs (8x8) one tile holds KX=KY=1563 plus ~2441 NNZ, which is
+# 34.9 KB of the 38 KB per-PE budget.  The hard ceiling here is 13_374 (100% of
+# budget); 12_500 keeps ~3 KB of slack, since the guard is an estimate.
+rows      = 12_500
+cols      = 12_500
+density   = 0.001
+seed      = 42
+# header, not the default valtask: at 64 PEs valtask adds vals[TOTAL_NNZ] + val_meta (45.3 KB)
+# and does not fit the 38 KB budget; header (34.9 KB) does.  This sweep predates the default change.
+encoding  = "header"
+
+
+[sweep.num_pes]
+# 4096 = 64x64 is the largest power of two whose near-square grid stays inside
+# the simulator's 100-per-dimension cap (8192 would need 128x64).
+pow2_up_to        = 4096
+points_per_octave = 1

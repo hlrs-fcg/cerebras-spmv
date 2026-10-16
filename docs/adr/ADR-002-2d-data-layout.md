@@ -1,6 +1,6 @@
 # ADR-002: 2D Data Layout: x Permanent on Wafer, A Streamed in Column Slices
 
-**Status:** Accepted  
+**Status:** Accepted; the layout is also used with A resident (ADR-009)  
 **Date:** 2026-05-31
 
 ## Context
@@ -46,3 +46,7 @@ Broadcasting the full $x$ vector to every PE requires $x$ to fit in each PE's 48
 - $N_\text{cols}$ is bounded by available per-PE-row SRAM allocated to $x$ (currently 3.1 M float32)
 - The east-west reduction adds $O(W)$ NoC messages per PE row per SpMV; at $W = 750$ this is negligible compared to H2D time (~0.003 ms vs ~2 ms)
 - Updating $x$ between Krylov iterations requires a NoC transpose for square matrices: $y$ lives on PE rows, new $x$ must live on PE columns (see ADR-005)
+
+## Amendment (2026-10-16): the layout under resident A, and its limits
+
+With A resident (ADR-009) the layout holds, but a tile is limited by the 48 KB PE memory and 16-bit local row indices, not by a stream. Measured: window ≈ T0 + K + (d + 1.13) KY + e NNZ_max + c (W - 1), with c ≈ 12.8 cycles per PE (the east-west chain) and e = 36.5 cycles per NNZ (random), 39 to 41 on real matrices. Block tiling piles the non-zeros of banded matrices onto few PEs, so the busiest PE sets the time while much of the wafer idles. A cyclic or permuted mapping would spread the diagonal; it is open for v3.0. Matrices with KY above 65,535 cannot be tiled this way.

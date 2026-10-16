@@ -1,0 +1,15 @@
+Cerebras SpMV
+Copyright 2026 Daniel Renschler, High-Performance Computing Center Stuttgart (HLRS), University of Stuttgart
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party code
+----------------
+src/csl/sync/pe.csl is vendored from cerebras/csl-examples
+(benchmarks/bandwidth-test/src/sync/pe.csl), Copyright 2025 Cerebras Systems, licensed under the
+Apache License, Version 2.0. It carries local changes, listed in the header of that file, which
+also keeps the original copyright and licence notice.
+
+Data, notebooks and documentation
+---------------------------------
+Result CSVs, notebooks and documentation are licensed under CC-BY-4.0; see cluster/results/LICENSE-DATA.md.

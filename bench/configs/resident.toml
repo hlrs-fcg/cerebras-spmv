@@ -1,0 +1,52 @@
+[meta]
+name        = "resident"
+description = """
+A resident on the wafer (src/csl/pe_resident.csl, docs/resident-spmv.md), hardware.
+
+Three sizes, in order, each ~200 NNZ/PE at d=1e-3 (the weak-scaling matrices of
+docs/results.md, so every number compares with the streamed run and the host CPU baseline):
+16 PEs smoke, 65,536 PEs (114,000^2, 13.0M NNZ), the full wafer (857,010 PEs, 414,000^2,
+171.4M NNZ).  Synced on-wafer timing, 20 passes.  Resident is
+compile-time (ENCODING:3), so each size is its own compile.  Run with --max-runs 1, then 2,
+then 3, never the three blind: the smoke must pass before 65K, 65K before the wafer.
+"""
+
+[output]
+work_dir = "cluster_work/sweeps/resident"
+results  = "cluster/results/data/{date}_{name}.csv"
+
+[[run]]
+rows           = 1_000
+cols           = 1_000
+density        = 0.01
+seed           = 42
+num_pes_target = 16
+encoding       = "resident"
+sync_timing    = true
+loop_count     = 20
+out_path       = "cluster_work/sweeps/resident"
+comment        = "resident smoke: 16 PEs, expect rel_err ~5e-8, 20/20 passes PASSED"
+
+[[run]]
+rows           = 114_000
+cols           = 114_000
+density        = 0.001
+seed           = 42
+num_pes_target = 65_536
+encoding       = "resident"
+sync_timing    = true
+loop_count     = 20
+out_path       = "cluster_work/sweeps/resident"
+comment        = "resident 65K: 13.0M NNZ, host CPU 3.5 ms, streamed wafer 45.2 ms"
+
+[[run]]
+rows           = 414_000
+cols           = 414_000
+density        = 0.001
+seed           = 42
+num_pes_target = 857_010
+encoding       = "resident"
+sync_timing    = true
+loop_count     = 20
+out_path       = "cluster_work/sweeps/resident"
+comment        = "resident full wafer: 171.4M NNZ, host CPU 61.7 ms, streamed wafer 458.8 ms"

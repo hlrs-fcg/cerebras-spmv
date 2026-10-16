@@ -1,0 +1,20 @@
+# Host tiling, RC 4739dc4 (bench/host_tiling_bench.py <preset> --checksum, uniform d=1e-3, user node: 32 cores, Intel Cascade Lake VM)
+# columns: preset backend run tile_extract_s host_prep_s setup_prep_s jit peak_RSS checksum (identical across backends within a preset)
+tile_65k_numpy 1 backend=numpy tile_extract=3.496 host_prep=4.355 setup_prep=0.240 jit-none peak RSS=1.06 GB ck=a2c18e76dbba0517
+tile_65k_numpy 2 backend=numpy tile_extract=3.485 host_prep=4.339 setup_prep=0.237 jit-none peak RSS=1.06 GB ck=a2c18e76dbba0517
+tile_65k_numpy 3 backend=numpy tile_extract=3.441 host_prep=4.298 setup_prep=0.232 jit-none peak RSS=1.08 GB ck=a2c18e76dbba0517
+tile_65k_numba 1 backend=numba tile_extract=0.269 host_prep=25.670 setup_prep=0.265 jit 13.39s peak RSS=0.83 GB ck=a2c18e76dbba0517
+tile_65k_numba 2 backend=numba tile_extract=0.219 host_prep=1.047 setup_prep=0.268 jit 0.61s peak RSS=0.80 GB ck=a2c18e76dbba0517
+tile_65k_numba 3 backend=numba tile_extract=0.227 host_prep=0.818 setup_prep=0.255 jit 0.40s peak RSS=0.79 GB ck=a2c18e76dbba0517
+tile_65k_aot 1 backend=aot tile_extract=0.927 host_prep=0.966 setup_prep=0.238 jit 0.00s peak RSS=0.71 GB ck=a2c18e76dbba0517
+tile_65k_aot 2 backend=aot tile_extract=0.901 host_prep=0.941 setup_prep=0.232 jit 0.00s peak RSS=0.72 GB ck=a2c18e76dbba0517
+tile_65k_aot 3 backend=aot tile_extract=0.918 host_prep=0.958 setup_prep=0.230 jit 0.00s peak RSS=0.71 GB ck=a2c18e76dbba0517
+tile_full_numpy 1 backend=numpy tile_extract=63.775 host_prep=75.104 setup_prep=4.688 jit-none peak RSS=13.67 GB ck=2d205263ed85cd69
+tile_full_numpy 2 backend=numpy tile_extract=68.172 host_prep=80.383 setup_prep=4.593 jit-none peak RSS=13.67 GB ck=2d205263ed85cd69
+tile_full_numpy 3 backend=numpy tile_extract=66.233 host_prep=78.018 setup_prep=4.631 jit-none peak RSS=13.67 GB ck=2d205263ed85cd69
+tile_full_numba 1 backend=numba tile_extract=2.995 host_prep=5.551 setup_prep=5.343 jit 1.03s peak RSS=9.26 GB ck=2d205263ed85cd69
+tile_full_numba 2 backend=numba tile_extract=2.969 host_prep=4.682 setup_prep=5.202 jit 0.44s peak RSS=9.26 GB ck=2d205263ed85cd69
+tile_full_numba 3 backend=numba tile_extract=3.004 host_prep=4.195 setup_prep=5.113 jit 0.38s peak RSS=9.27 GB ck=2d205263ed85cd69
+tile_full_aot 1 backend=aot tile_extract=28.064 host_prep=28.717 setup_prep=4.675 jit 0.00s peak RSS=9.18 GB ck=2d205263ed85cd69
+tile_full_aot 2 backend=aot tile_extract=23.801 host_prep=24.447 setup_prep=4.595 jit 0.00s peak RSS=9.17 GB ck=2d205263ed85cd69
+tile_full_aot 3 backend=aot tile_extract=27.375 host_prep=28.025 setup_prep=4.699 jit 0.00s peak RSS=9.18 GB ck=2d205263ed85cd69

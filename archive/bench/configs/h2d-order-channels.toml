@@ -1,0 +1,93 @@
+[meta]
+name        = "h2d-order-channels"
+description = """
+Memory order x I/O channels in 'full' mode, at a fixed 65,536 PEs.
+
+Follows h2d-shape-channels.toml, which established that the host->wafer ceiling
+was transfer SHAPE: 'full' mode with 8 channels beat the 'column'/1 baseline
+behind every earlier result by 2.05x (41.578 -> 20.322 ms).
+
+Two questions here.
+
+1. MEMORY ORDER.  https://sdk.cerebras.ai/tensor-streaming states "Column-major
+   delivers better bandwidth than row-major", and Cerebras' own bandwidth
+   benchmark uses COL_MAJOR for the transfer it measures and ROW_MAJOR only for
+   small timestamp readback.  Every result we have was measured ROW_MAJOR, i.e.
+   on the documented slower path.  Crossing order with channels separates "order
+   helps" from "order only helps once channels are saturated".
+
+2. THE CHANNEL CEILING.  SdkRuntime caps at 16 channels (WSE-3 has 62 per edge),
+   and the docs say improvements are "minimal past 8".  channels=16 is one
+   confirmatory point on that plateau, not a sweep.
+
+Every run also now reports the one-time setup transfer, which goes
+streaming=False.  Copy mode has no per-word kernel task, so it measures the link
+ALONE -- 316.4 MB of it at this geometry, 2.6x more than the 119.5 MB streaming
+transfer, in the same job.  The ratio streaming:copy is our per-word kernel cost
+(stream_word: header decode + FMAC), and it decides whether to keep tuning
+transfers or to go after the encoding (ADR-003 val-only).  That is the real
+payload of this campaign; the order answer is a bonus.
+
+Fixed point: 114,000^2 @ d=1e-3 = 12,996,000 NNZ on a 256x256 grid -- identical
+to h2d-shape-channels, so full/row/8 re-measures the recorded 20.322 ms and acts
+as the comparability check.  Run it first.
+
+channels is compile-time, memcpy_order is runtime, so this is 2 compiles for 4
+points (~70-170 s each).
+"""
+
+[output]
+work_dir = "cluster_work/sweeps/h2d-order-channels"
+results  = "cluster/results/data/{date}_{name}.csv"
+
+# --- comparability: re-measures the recorded 20.322 ms, and is the first
+#     full-scale copy-mode number we will ever have. ---
+[[run]]
+rows           = 114_000
+cols           = 114_000
+density        = 0.001
+seed           = 42
+num_pes_target = 65_536
+channels       = 8
+h2d_mode       = "full"
+memcpy_order   = "row"
+out_path       = "cluster_work/sweeps/h2d-order-channels"
+comment        = "order x channels: row/8 (baseline, expect ~20.3 ms, rel_err 1.49e-07)"
+
+# --- the documented-faster order, same channels. ---
+[[run]]
+rows           = 114_000
+cols           = 114_000
+density        = 0.001
+seed           = 42
+num_pes_target = 65_536
+channels       = 8
+h2d_mode       = "full"
+memcpy_order   = "col"
+out_path       = "cluster_work/sweeps/h2d-order-channels"
+comment        = "order x channels: col/8 (the documented faster order)"
+
+# --- the SDK's channel ceiling, both orders. ---
+[[run]]
+rows           = 114_000
+cols           = 114_000
+density        = 0.001
+seed           = 42
+num_pes_target = 65_536
+channels       = 16
+h2d_mode       = "full"
+memcpy_order   = "row"
+out_path       = "cluster_work/sweeps/h2d-order-channels"
+comment        = "order x channels: row/16 (is 8 really the plateau?)"
+
+[[run]]
+rows           = 114_000
+cols           = 114_000
+density        = 0.001
+seed           = 42
+num_pes_target = 65_536
+channels       = 16
+h2d_mode       = "full"
+memcpy_order   = "col"
+out_path       = "cluster_work/sweeps/h2d-order-channels"
+comment        = "order x channels: col/16 (best case if both levers compound)"

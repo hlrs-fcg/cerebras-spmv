@@ -1,0 +1,37 @@
+[meta]
+name        = "resident-null-twin"
+description = """
+The resident kernel (COO scatter, docs/resident-spmv.md) with its null twin (--null-spmv: spmv() is a no-op, so the
+synced window is the launch floor), 16 PEs, synced, 20 passes, hardware.  Window(resident) - window(null twin) is the
+SpMV on the wafer.  The non-null run must validate (5.32e-08); the twin skips validation.  One compile per run
+(the null flag is compile-time), ~80 s each.  Run in order, stopping at the first failure.
+"""
+
+[output]
+work_dir = "cluster_work/sweeps/resident-null-twin"
+results  = "cluster/results/data/{date}_{name}.csv"
+
+[[run]]
+rows           = 1_000
+cols           = 1_000
+density        = 0.01
+seed           = 42
+num_pes_target = 16
+encoding       = "resident"
+sync_timing    = true
+loop_count     = 20
+out_path       = "cluster_work/sweeps/resident-null-twin"
+comment        = "resident: 16 PEs, expect 5.32e-08"
+
+[[run]]
+rows           = 1_000
+cols           = 1_000
+density        = 0.01
+seed           = 42
+num_pes_target = 16
+encoding       = "resident"
+sync_timing    = true
+loop_count     = 20
+null_spmv      = true
+out_path       = "cluster_work/sweeps/resident-null-twin"
+comment        = "resident NULL twin (launch floor): 16 PEs, window = launch floor, y not validated"

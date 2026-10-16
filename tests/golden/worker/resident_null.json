@@ -1,0 +1,377 @@
+{
+"exit": 0,
+"calls": [
+[
+"init",
+[],
+null
+],
+[
+"get_id",
+"x_vec"
+],
+[
+"get_id",
+"col_indices"
+],
+[
+"get_id",
+"row_ptrs"
+],
+[
+"get_id",
+"y_result"
+],
+[
+"get_id",
+"tsc_pack"
+],
+[
+"get_id",
+"vals"
+],
+[
+"get_id",
+"row_ids"
+],
+[
+"get_id",
+"sync_pack"
+],
+[
+"load"
+],
+[
+"run"
+],
+[
+"h2d",
+"x_vec",
+"float32",
+768,
+"979f726519b53ac6",
+0,
+0,
+4,
+4,
+48,
+false,
+"32",
+"COL",
+true
+],
+[
+"h2d",
+"col_indices",
+"int32",
+2160,
+"6537f2ee6ebea727",
+0,
+0,
+4,
+4,
+135,
+false,
+"32",
+"COL",
+true
+],
+[
+"h2d",
+"vals",
+"float32",
+2160,
+"d25c17c9aab426fc",
+0,
+0,
+4,
+4,
+135,
+false,
+"32",
+"COL",
+true
+],
+[
+"h2d",
+"row_ids",
+"int32",
+2160,
+"b809de1070ff8524",
+0,
+0,
+4,
+4,
+135,
+false,
+"32",
+"COL",
+true
+],
+[
+"h2d",
+"row_ptrs",
+"int32",
+816,
+"2c0029ca4c434feb",
+0,
+0,
+4,
+4,
+51,
+false,
+"32",
+"COL",
+false
+],
+[
+"d2h",
+"row_ptrs",
+0,
+0,
+4,
+4,
+1,
+false,
+"32",
+"COL",
+false
+],
+[
+"d2h",
+"row_ptrs",
+0,
+0,
+4,
+4,
+1,
+false,
+"32",
+"COL",
+false
+],
+[
+"launch",
+"f_sync",
+true
+],
+[
+"launch",
+"f_tic",
+true
+],
+[
+"launch",
+"spmv",
+true
+],
+[
+"launch",
+"f_toc",
+false
+],
+[
+"d2h",
+"y_result",
+0,
+0,
+1,
+4,
+1,
+false,
+"32",
+"ROW",
+false
+],
+[
+"d2h",
+"y_result",
+0,
+0,
+1,
+4,
+1,
+false,
+"32",
+"ROW",
+false
+],
+[
+"d2h",
+"y_result",
+0,
+0,
+1,
+4,
+50,
+false,
+"32",
+"ROW",
+false
+],
+[
+"d2h",
+"sync_pack",
+0,
+0,
+4,
+4,
+5,
+false,
+"32",
+"ROW",
+false
+],
+[
+"launch",
+"f_tic",
+true
+],
+[
+"launch",
+"spmv",
+true
+],
+[
+"launch",
+"f_toc",
+false
+],
+[
+"d2h",
+"y_result",
+0,
+0,
+1,
+4,
+1,
+false,
+"32",
+"ROW",
+false
+],
+[
+"d2h",
+"y_result",
+0,
+0,
+1,
+4,
+1,
+false,
+"32",
+"ROW",
+false
+],
+[
+"d2h",
+"y_result",
+0,
+0,
+1,
+4,
+50,
+false,
+"32",
+"ROW",
+false
+],
+[
+"d2h",
+"sync_pack",
+0,
+0,
+4,
+4,
+5,
+false,
+"32",
+"ROW",
+false
+],
+[
+"d2h",
+"tsc_pack",
+0,
+0,
+4,
+4,
+3,
+false,
+"32",
+"ROW",
+false
+],
+[
+"stop"
+]
+],
+"progress": [
+"start resident 4x4 loop_count=2 sync=True null_spmv=True",
+"host matrix and tiles ready",
+"runner.load / run",
+"setup copy start",
+"setup copy and its barrier done",
+"f_sync",
+"pass 1/2 start",
+"pass 1 launches start",
+"pass 1 launches returned, barrier D2H start",
+"pass 1 y read back, sync_pack next",
+"pass 1/2 end",
+"pass 2/2 start",
+"pass 2 launches start",
+"pass 2 launches returned, barrier D2H start",
+"pass 2 y read back, sync_pack next",
+"pass 2/2 end"
+],
+"row": {
+"git_commit": "unknown",
+"validation_passed": "True",
+"exit_reason": "SUCCESS_NULL_SPMV",
+"error_message": "",
+"relative_error": "0.0",
+"matrix_rows": "200",
+"matrix_cols": "190",
+"density": "0.05",
+"total_nnz": "1900",
+"seed": "42",
+"num_pes": "16",
+"grid_width": "4",
+"grid_height": "4",
+"kx": "48",
+"ky": "50",
+"num_col_stripes": "1",
+"architecture": "wse3",
+"channels": "1",
+"width_west_buf": "0",
+"width_east_buf": "0",
+"h2d_mode": "column",
+"memcpy_order": "row",
+"encoding": "resident",
+"setup_order": "col",
+"setup_strips": "1",
+"serialize_column_rects": "False",
+"max_memory_per_pe": "2416",
+"avg_memory_per_pe": "2416.0",
+"memory_utilization_pct": "0.0",
+"tile_backend": "numpy",
+"worker_glibc": "unknown",
+"worker_cpus": "8",
+"h2d_bytes_total": "0",
+"setup_h2d_bytes": "32256",
+"loop_count": "2",
+"sync_timing": "True",
+"null_spmv": "True",
+"arithmetic_intensity": "0.0",
+"min_nnz_per_pe": "99",
+"max_nnz_per_pe": "135",
+"avg_nnz_per_pe": "118.75",
+"load_imbalance_pct": "30.315789473684212",
+"num_idle_pes": "0",
+"pe_efficiency_pct": "100.0",
+"num_active_pes": "0",
+"git_commit_full": "",
+"git_dirty": "False",
+"repo_describe": ""
+}
+}

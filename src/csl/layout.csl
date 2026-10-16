@@ -1,71 +1,171 @@
-// layout.csl — 2D PE grid with east-west reduction routing
 param width:     i16;
 param height:    i16;
-param KX:        i16;   // x elements per PE column = ceil(cols / width)
-param KY:        i16;   // rows per PE row           = ceil(rows / height)
-param TOTAL_NNZ: i16;   // A tile buffer size (compile-time max NNZ per tile)
+param KX:        i32;
+param KY:        i32;
+param TOTAL_NNZ: i32;
+param EW_ENABLED: i32;
+param MEMCPYH2D_DATA_1_ID: i16;
+// Stream encoding: 0 = row-header (pe.csl, ADR-003 as accepted), 2 = val-only stream
+// consumed by a per-word data task (pe_valtask.csl), 4 = the resident kernel with spmv()
+// compiled as a no-op (--null-spmv: the launch-latency floor), 3 = A resident on the wafer,
+// nothing streamed per call (pe_resident.csl, docs/resident-spmv.md).  1 was the bulk
+// val-only kernel (pe_val.csl, removed in v2.0: it hung under concurrent streams); the ids
+// are kept so artifacts compiled before stay valid.  Separate files rather than branches
+// inside one, so each validated kernel stays byte-identical.
+param ENCODING:  i16;
+// Synced on-wafer timing (docs/synced-timing.md): 1 adds the
+// csl-examples sync module plus f_sync / f_tic / f_toc and sync_pack.  0 leaves
+// both kernels binding, routing and exporting exactly what they did before.
+param SYNC_TIMING: i16;
+// (The resident kernel's local_spmv used to be a compile param LOCAL_KERNEL: 0 CSR loop, 1 u16 loop, 2 COO
+// scatter.  The COO scatter won on hardware and is the only one; docs/resident-spmv.md.)
 
-const REDUCE_COLOR: color = @get_color(1);
+const EW_TX_COLOR: color = @get_color(7);
+const EW_RX_COLOR: color = @get_color(8);
+
+// Sync module resources, used only when SYNC_TIMING == 1.  Colors avoid 0
+// (MEMCPYH2D_DATA_1), 2 (the conventional MEMCPYD2H_DATA_1) and 7/8 (EW); the
+// module wants them strictly increasing.  Its input/output queues are 3, 4, 5
+// (pe.csl / pe_valtask.csl), clear of 2 (H2D stream) and 6 (EW).  Local tasks
+// 15..18 are the ones csl-examples' bandwidth-test uses, clear of our 10/11.
+const SYNC_C0: color = @get_color(1);
+const SYNC_C1: color = @get_color(3);
+const SYNC_C2: color = @get_color(4);
+const SYNC_C3: color = @get_color(5);
+const SYNC_C4: color = @get_color(6);
+
+// Sync module task ids (see above for the colors).  Nothing from src/csl/sync/ is
+// imported here: SDK 2.10.0 removed comptime_struct, which the vendored
+// sync/layout.csl's get_params returned, so the per-PE routing it computed is done
+// inline below and handed to the kernels as flat params.  The sync PE module itself
+// is imported by the kernels only when SYNC_TIMING == 1.
+const SYNC_STARTUP:    local_task_id = @get_local_task_id(15);
+const SYNC_SYNC_Y:     local_task_id = @get_local_task_id(16);
+const SYNC_SYNC_BCAST: local_task_id = @get_local_task_id(17);
+const SYNC_EXIT:       local_task_id = @get_local_task_id(18);
 
 const memcpy = @import_module("<memcpy/get_params>", .{
     .width  = width,
     .height = height,
+    .MEMCPYH2D_1 = MEMCPYH2D_DATA_1_ID,
 });
 
 layout {
     @set_rectangle(width, height);
 
+    // The sync module's routing has no w == 1 / h == 1 case (its own WARNING);
+    // SpMVConfig refuses those grids first, this is the backstop.
+    if (SYNC_TIMING == 1) {
+        @comptime_assert(width > 1 and height > 1);
+    }
+
     var py: i16 = 0;
     while (py < height) : (py += 1) {
         var px: i16 = 0;
         while (px < width) : (px += 1) {
-            @set_tile_code(px, py, "pe.csl", .{
+            const pe_params = .{
                 .memcpy_params = memcpy.get_params(px),
                 .KX        = KX,
                 .KY        = KY,
                 .TOTAL_NNZ = TOTAL_NNZ,
-                .WIDTH     = width,
-                .HEIGHT    = height,
-            });
-
-            // Configure REDUCE_COLOR routing for east-to-west scan.
-            // Rightmost PE only sends; leftmost PE only receives.
-            // A single-column grid (width == 1) needs no routing.
-            const is_right: bool = (px == width - 1);
-            const is_left:  bool = (px == 0);
-
-            if (is_right and is_left) {
-                // width == 1: no reduction traffic
-                @set_color_config(px, py, REDUCE_COLOR, .{
-                    .routes = .{ .rx = .{}, .tx = .{} },
-                });
-            } else if (is_right) {
-                @set_color_config(px, py, REDUCE_COLOR, .{
-                    .routes = .{ .rx = .{}, .tx = .{WEST} },
-                });
-            } else if (is_left) {
-                @set_color_config(px, py, REDUCE_COLOR, .{
-                    .routes = .{ .rx = .{EAST}, .tx = .{} },
-                });
+                .EW_TX_COLOR = EW_TX_COLOR,
+                .EW_RX_COLOR = EW_RX_COLOR,
+                .EW_ENABLED  = EW_ENABLED,
+                .W          = width,
+                .MY_X       = px,
+                .SYNC_TIMING = SYNC_TIMING,
+                // Same assignment as the vendored sync/layout.csl get_params:
+                // alternate the two colors of each axis by PE parity.
+                .c_recv_px  = if (px % 2 == 0) SYNC_C0 else SYNC_C1,
+                .c_send_px  = if (px % 2 == 0) SYNC_C1 else SYNC_C0,
+                .c_recv_py  = if (py % 2 == 0) SYNC_C2 else SYNC_C3,
+                .c_send_py  = if (py % 2 == 0) SYNC_C3 else SYNC_C2,
+                .c_bcast    = SYNC_C4,
+                .STARTUP    = SYNC_STARTUP,
+                .SYNC_Y     = SYNC_SYNC_Y,
+                .SYNC_BCAST = SYNC_SYNC_BCAST,
+                .EXIT       = SYNC_EXIT,
+                .first_px   = px == 0,
+                .last_px    = px == width - 1,
+                .first_py   = py == 0,
+                .last_py    = py == height - 1,
+            };
+            const res_params = .{
+                .memcpy_params = memcpy.get_params(px),
+                .KX        = KX,
+                .KY        = KY,
+                .TOTAL_NNZ = TOTAL_NNZ,
+                .EW_TX_COLOR = EW_TX_COLOR,
+                .EW_RX_COLOR = EW_RX_COLOR,
+                .EW_ENABLED  = EW_ENABLED,
+                .W          = width,
+                .MY_X       = px,
+                .SYNC_TIMING = SYNC_TIMING,
+                .NULL_SPMV   = ENCODING == 4,
+                // Same assignment as the vendored sync/layout.csl get_params:
+                // alternate the two colors of each axis by PE parity.
+                .c_recv_px  = if (px % 2 == 0) SYNC_C0 else SYNC_C1,
+                .c_send_px  = if (px % 2 == 0) SYNC_C1 else SYNC_C0,
+                .c_recv_py  = if (py % 2 == 0) SYNC_C2 else SYNC_C3,
+                .c_send_py  = if (py % 2 == 0) SYNC_C3 else SYNC_C2,
+                .c_bcast    = SYNC_C4,
+                .STARTUP    = SYNC_STARTUP,
+                .SYNC_Y     = SYNC_SYNC_Y,
+                .SYNC_BCAST = SYNC_SYNC_BCAST,
+                .EXIT       = SYNC_EXIT,
+                .first_px   = px == 0,
+                .last_px    = px == width - 1,
+                .first_py   = py == 0,
+                .last_py    = py == height - 1,
+            };
+            if (ENCODING == 3 or ENCODING == 4) {
+                @set_tile_code(px, py, "pe_resident.csl", res_params);
+            } else if (ENCODING == 2) {
+                @set_tile_code(px, py, "pe_valtask.csl", pe_params);
             } else {
-                @set_color_config(px, py, REDUCE_COLOR, .{
-                    .routes = .{ .rx = .{EAST}, .tx = .{WEST} },
-                });
+                @set_tile_code(px, py, "pe.csl", pe_params);
+            }
+
+            // Alternating color scheme: each PE only calls @set_color_config once per color
+            if (px > 0) {
+                if (px % 2 == 0) {
+                    @set_color_config(px, py, EW_TX_COLOR, .{ .routes = .{ .rx = .{RAMP}, .tx = .{WEST} } });
+                } else {
+                    @set_color_config(px, py, EW_RX_COLOR, .{ .routes = .{ .rx = .{RAMP}, .tx = .{WEST} } });
+                }
+            }
+            if (px < width - 1) {
+                if (px % 2 == 0) {
+                    @set_color_config(px, py, EW_RX_COLOR, .{ .routes = .{ .rx = .{EAST}, .tx = .{RAMP} } });
+                } else {
+                    @set_color_config(px, py, EW_TX_COLOR, .{ .routes = .{ .rx = .{EAST}, .tx = .{RAMP} } });
+                }
             }
         }
     }
 
-    // H2D symbols (host writes to all PEs)
     @export_name("x_vec",       [*]f32, true);
-    @export_name("a_values",    [*]f32, true);
-    @export_name("a_col_ids",   [*]i32, true);
-    @export_name("a_row_ptr",   [*]i32, true);
-
-    // D2H symbols (host reads from PEs)
-    // y_out: host downloads from column 0 only via memcpy_d2h(... x=0, width=1 ...)
-    // time_buf_f32: host reads from PE (0,0) for timing
-    @export_name("y_out",        [*]f32, false);
-    @export_name("time_buf_f32", [*]f32, false);
-
-    @export_name("spmv", fn()void);
+    @export_name("col_indices", [*]i32, true);
+    @export_name("row_ptrs",    [*]i32, true);
+    if (ENCODING == 2) {
+        @export_name("val_meta",    [*]i32, true);
+    }
+    if (ENCODING == 3 or ENCODING == 4) {
+        @export_name("vals",        [*]f32, true);
+        @export_name("row_ids",     [*]i32, true);
+    }
+    @export_name("y_result",    [*]f32, false);
+    @export_name("tsc_pack",    [*]f32, false);
+    @export_name("spmv",    fn()void);
+    // The resident kernel holds the command stream in spmv() until its pass is done,
+    // so it has no separate wait.
+    if (ENCODING < 3) {
+        @export_name("wait_ew", fn()void);
+    }
+    if (SYNC_TIMING == 1) {
+        @export_name("sync_pack", [*]f32, false);
+        @export_name("f_sync",  fn()void);
+        @export_name("f_tic",   fn()void);
+        @export_name("f_toc",   fn()void);
+    }
 }

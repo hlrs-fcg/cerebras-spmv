@@ -1,0 +1,3 @@
+580e41f, node <user node>, `run.py sweep ecology2_sweep.toml` (one [[run]]: mtx_file = matrices/ecology2.mtx, num_pes_target = 16, simulator, resident); exit=1, 21 s wall, no compile job started.
+INFO: Loaded ecology2_sweep.toml -> cluster/results/data/2026-10-15_ecology2-refusal.csv
+ERROR: ecology2_sweep.toml: [[run]] #1 (must be refused): ecology2.mtx does not fit on 4x4 = 16 PEs with encoding resident: KY=250000 > 65535 (16-bit local row index; use a taller grid); no grid up to the full wafer holds it with the block tiling. Nothing was compiled.

@@ -1,0 +1,30 @@
+// Stand-in for sync/pe.csl when SYNC_TIMING == 0 (selected by the kernels'
+// sync_pe_file()).  Takes the same params so the kernels' import is identical, but
+// declares no tasks, queues, routes or DSDs: with the flag off nothing of the sync
+// module is compiled.  The kernels reference only f_sync and tscRefBuffer, and only
+// export (and the host only calls) them under SYNC_TIMING == 1.
+
+param c_recv_px: color;
+param c_send_px: color;
+param c_recv_py: color;
+param c_send_py: color;
+param c_bcast: color;
+
+param STARTUP: local_task_id;
+param SYNC_Y: local_task_id;
+param SYNC_BCAST: local_task_id;
+param EXIT: local_task_id;
+
+param first_px: bool;
+param last_px: bool;
+param first_py: bool;
+param last_py: bool;
+
+param f_callback : fn ()void;
+param enabled: bool;
+param input_queues:[3]u16;
+param output_queues:[3]u16;
+
+var tscRefBuffer = @zeros([3]u16);
+
+fn f_sync() void {}

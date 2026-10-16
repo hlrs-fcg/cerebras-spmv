@@ -188,16 +188,29 @@ artifact_path.json
 
 # Benchmark and test results
 *.csv.bak
+*.bak
+progress.log
 *.npz
 
 # Project specific
-.json
-**.*.json
-**.json
+# Generated JSON, by name (a blanket **.json also swallowed the golden traces and the archive stamp)
+wsjob-*.json
+run_meta.json
+sim_stats.json
+BUILD_INFO.json
 *.tar.gz
 todo.md
 .idea/
 *.ipynb
+!analysis/*.ipynb
 
 1.sh
 2.sh
+
+# Simulator traces and scratch (12 MB+ of CTF per run)
+simfab_traces/
+wio_flows_tmpdir.*/
+
+# COO / tile caches
+matrices/
+

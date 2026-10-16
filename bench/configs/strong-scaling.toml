@@ -8,10 +8,19 @@ results  = "cluster/results/data/{date}_{name}.csv"
 
 [sweep]
 type    = "strong_scaling"
-rows    = 10_000_000
-cols    = 10_000_000
+# Was 10_000_000^2 at d=1e-3 = 1e11 NNZ, which cannot fit on a WSE-3 at any PE
+# count: the values alone are 400 GB against ~41 GB of total wafer SRAM.
+# Strong scaling is bound by its smallest PE count (64), where one tile holds
+# KX=KY=1563 plus ~2441 NNZ = 34.9 KB of the 38 KB per-PE budget.  The hard
+# ceiling is 13_374; 12_500 keeps ~3 KB of slack against an estimated guard.
+rows    = 12_500
+cols    = 12_500
 density = 0.001
 seed    = 42
+# header, not the default valtask: at 64 PEs valtask adds vals[TOTAL_NNZ] + val_meta (45.3 KB)
+# and does not fit the 38 KB budget; header (34.9 KB) does.  This sweep predates the default change.
+encoding = "header"
+
 
 [sweep.num_pes]
 pow2_up_to        = "fabric_max"

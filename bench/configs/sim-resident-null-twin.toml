@@ -1,0 +1,38 @@
+[meta]
+name        = "sim-resident-null-twin"
+description = """
+The resident kernel (COO scatter, docs/resident-spmv.md) and its null twin in the simulator, synced, 20 passes.
+Run before the hardware pair (resident-null-twin.toml).  The simulator checks that both compile and that the resident run
+validates; it says nothing about speed.
+"""
+
+[output]
+work_dir = "cluster_work/sweeps/sim-resident-null-twin"
+results  = "cluster/results/data/{date}_{name}.csv"
+
+[[run]]
+rows           = 1_000
+cols           = 1_000
+density        = 0.01
+seed           = 42
+num_pes_target = 16
+simulator      = true
+encoding       = "resident"
+sync_timing    = true
+loop_count     = 20
+out_path       = "cluster_work/sweeps/sim-resident-null-twin"
+comment        = "resident: 16 PEs, expect 5.32e-08"
+
+[[run]]
+rows           = 1_000
+cols           = 1_000
+density        = 0.01
+seed           = 42
+num_pes_target = 16
+simulator      = true
+encoding       = "resident"
+sync_timing    = true
+loop_count     = 20
+null_spmv      = true
+out_path       = "cluster_work/sweeps/sim-resident-null-twin"
+comment        = "resident NULL twin (launch floor): 16 PEs, window = launch floor, y not validated"
