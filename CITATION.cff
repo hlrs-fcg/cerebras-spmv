@@ -19,8 +19,8 @@ authors:
 repository-code: "https://github.com/hlrs-fcg/cerebras-spmv"
 license: Apache-2.0
 version: "2.0.0"
-# date-released: set on the day you tag v2.0 (YYYY-MM-DD)
-# doi: added after Zenodo mints the version DOI (or use the concept DOI here)
+date-released: 2026-10-16
+doi: 10.5281/zenodo.23420046
 keywords:
   - sparse matrix-vector multiplication
   - SpMV

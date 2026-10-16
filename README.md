@@ -1,5 +1,7 @@
 # SpMV on Cerebras WSE
 
+[![DOI](https://zenodo.org/badge/1081864933.svg)](https://doi.org/10.5281/zenodo.23420046)
+
 Sparse matrix-vector multiplication (SpMV) on the Cerebras WSE-3.
 
 ## Published work
